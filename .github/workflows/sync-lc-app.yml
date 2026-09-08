@@ -1,0 +1,46 @@
+name: Sync canonical LC App
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lc-app-preview-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: github.event.head_commit.message != 'Sync LC App preview from canonical main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch canonical LC App
+        run: |
+          git clone --depth 1 https://github.com/minasyannarek13-RBB/lc-app-investor-demo.git /tmp/lc-source
+          test -f /tmp/lc-source/LC_App_GitHub_Pages_Upload/index.html
+          head -c 15 /tmp/lc-source/LC_App_GitHub_Pages_Upload/index.html | grep -qi '<!doctype html>'
+
+      - name: Sync app to preview root
+        run: |
+          rsync -a /tmp/lc-source/LC_App_GitHub_Pages_Upload/ ./
+          rm -f CNAME
+
+      - name: Commit synced preview
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo 'Preview already matches canonical app.'
+            exit 0
+          fi
+          git config user.name 'lc-preview-sync'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'Sync LC App preview from canonical main'
+          git push origin HEAD:main
