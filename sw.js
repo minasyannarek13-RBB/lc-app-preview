@@ -1,4 +1,4 @@
-const CACHE_NAME = "lc-app-investor-demo-v90";
+const CACHE_NAME = "lc-app-investor-demo-v91";
 
 const FILES_TO_CACHE = [
   "./",
