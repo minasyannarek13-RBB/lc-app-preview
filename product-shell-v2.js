@@ -13,28 +13,21 @@
   ];
 
   function ensureCss() {
-    if (document.getElementById(CSS_ID)) return;
-    const link = document.createElement("link");
-    link.id = CSS_ID;
-    link.rel = "stylesheet";
-    link.href = "product-shell-v2.css?v=1";
-    document.head.appendChild(link);
+    let link = document.getElementById(CSS_ID);
+    if (!link) {
+      link = document.createElement("link");
+      link.id = CSS_ID;
+      link.rel = "stylesheet";
+      document.head.appendChild(link);
+    }
+    if (!/product-shell-v2\.css\?v=2$/.test(link.href)) link.href = "product-shell-v2.css?v=2";
   }
 
-  function productRoot() {
-    return document.querySelector(PRODUCT_SELECTOR);
-  }
-
-  function isProductRoute() {
-    return /^#\/product(?:\/|$)/.test(window.location.hash || "#/product");
-  }
+  const productRoot = () => document.querySelector(PRODUCT_SELECTOR);
+  const isProductRoute = () => /^#\/product(?:\/|$)/.test(window.location.hash || "#/product");
 
   function currentRoute() {
-    const parts = String(window.location.hash || "#/product")
-      .replace(/^#\/?/, "")
-      .split("?")[0]
-      .split("/")
-      .filter(Boolean);
+    const parts = String(window.location.hash || "#/product").replace(/^#\/?/, "").split("?")[0].split("/").filter(Boolean);
     return parts[0] === "product" ? parts.slice(1) : [];
   }
 
@@ -49,14 +42,20 @@
 
   function activeNav() {
     const route = currentRoute();
-    if (route[0] === "creator") return "discover";
-    if (route[0] === "live") return "discover";
-    if (route[0] === "handoff") return "discover";
+    if (["creator", "live", "handoff"].includes(route[0])) return "discover";
     const title = productRoot()?.querySelector(".lc-product-brand strong")?.textContent?.toLowerCase() || "";
     if (/account|profile|settings|safety|privacy/.test(title)) return "account";
     if (/creator home|create|session|content/.test(title) && currentPersonaLabel() === "Creator") return "creator";
     if (/discover|creator/.test(title)) return "discover";
     return "home";
+  }
+
+  function syncRouteState(root) {
+    const route = currentRoute();
+    const routeKey = route.length ? route.join("-") : "home";
+    root.dataset.lcRoute = routeKey;
+    root.dataset.lcPersona = currentPersonaLabel().toLowerCase();
+    document.documentElement.dataset.lcRoute = routeKey;
   }
 
   function ensureRail() {
@@ -116,8 +115,7 @@
   function normalizeNavigationCopy(root) {
     root.querySelectorAll(".lc-product-tabs button").forEach((button) => {
       const value = button.dataset.lcProduct;
-      if (value === "home" && /industry/i.test(button.textContent || "")) return;
-      if (value === "home" && /creator/i.test(button.textContent || "")) return;
+      if (value === "home" && /industry|creator/i.test(button.textContent || "")) return;
       if (value === "home") button.textContent = "Discover";
       if (value === "discover") button.textContent = "Creators";
       if (value === "creator") button.textContent = "Create";
@@ -143,13 +141,14 @@
     });
 
     root.querySelectorAll("button").forEach((button) => {
-      if (!button.getAttribute("aria-label") && !String(button.textContent || "").trim()) {
-        button.setAttribute("aria-label", "LC App action");
-      }
+      if (!button.getAttribute("aria-label") && !String(button.textContent || "").trim()) button.setAttribute("aria-label", "LC App action");
+      if (button.disabled) button.setAttribute("aria-disabled", "true");
+      else button.removeAttribute("aria-disabled");
     });
 
     const labelledFieldIds = new Set(Array.from(root.querySelectorAll("label[for]"), (label) => label.htmlFor).filter(Boolean));
     root.querySelectorAll("input,select,textarea").forEach((field) => {
+      if (!field.getAttribute("autocomplete") && field.tagName === "INPUT") field.setAttribute("autocomplete", "off");
       if (field.getAttribute("aria-label") || (field.id && labelledFieldIds.has(field.id))) return;
       const placeholder = field.getAttribute("placeholder");
       const name = field.getAttribute("name");
@@ -160,7 +159,7 @@
       banner.setAttribute("role", "status");
       banner.setAttribute("aria-label", "Illustrative preview mode");
     });
-
+    root.querySelectorAll(".lc-product-connectivity").forEach((banner) => banner.setAttribute("role", "alert"));
     root.querySelectorAll(".lc-product-empty").forEach((empty) => {
       if (!empty.getAttribute("role")) empty.setAttribute("role", "status");
     });
@@ -171,16 +170,24 @@
     document.documentElement.classList.toggle("lc-v2-busy", busy);
   }
 
+  function syncScrollState() {
+    const root = productRoot();
+    if (!root) return;
+    root.dataset.lcScrolled = root.scrollTop > 10 ? "true" : "false";
+  }
+
   function upgrade() {
     ensureCss();
     ensureLoadingBar();
     document.documentElement.classList.toggle("lc-product-v2", isProductRoute());
     const root = productRoot();
     if (!root || !isProductRoute()) return;
+    syncRouteState(root);
     ensureRail();
     normalizeNavigationCopy(root);
     improveSemantics(root);
     syncBusyState(root);
+    syncScrollState();
   }
 
   let raf = 0;
@@ -190,12 +197,20 @@
   };
 
   const observer = new MutationObserver(scheduleUpgrade);
-  observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "hidden", "disabled", "aria-hidden"] });
+  observer.observe(document.documentElement, { childList:true, subtree:true, attributes:true, attributeFilter:["class","hidden","disabled","aria-hidden"] });
 
-  window.addEventListener("hashchange", scheduleUpgrade);
+  document.addEventListener("scroll", (event) => {
+    if (event.target === productRoot()) requestAnimationFrame(syncScrollState);
+  }, true);
+  window.addEventListener("hashchange", () => {
+    const root = productRoot();
+    if (root) root.scrollTo({ top:0, behavior:"auto" });
+    scheduleUpgrade();
+  });
   window.addEventListener("online", scheduleUpgrade);
   window.addEventListener("offline", scheduleUpgrade);
   window.addEventListener("pageshow", scheduleUpgrade);
-  document.addEventListener("DOMContentLoaded", scheduleUpgrade, { once: true });
+  window.addEventListener("resize", scheduleUpgrade, { passive:true });
+  document.addEventListener("DOMContentLoaded", scheduleUpgrade, { once:true });
   scheduleUpgrade();
 })();
