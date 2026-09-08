@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LC App V2 Static Offline Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08080b;
+      --panel: #131118;
+      --panel-2: #1b1721;
+      --text: #f7efe3;
+      --muted: #b9abb8;
+      --gold: #f0bd65;
+      --red: #e1404c;
+      --line: rgba(255,255,255,.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(225,64,76,.22), transparent 30%),
+        radial-gradient(circle at 80% 10%, rgba(240,189,101,.18), transparent 28%),
+        linear-gradient(180deg, #0c090f 0%, var(--bg) 52%, #050507 100%);
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .shell {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      padding: 20px 14px 42px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 0 14px;
+      background: linear-gradient(180deg, rgba(8,8,11,.96), rgba(8,8,11,.74));
+      backdrop-filter: blur(16px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(240,189,101,.55);
+      border-radius: 8px;
+      background: linear-gradient(145deg, #25150e, #3d1218);
+      color: var(--gold);
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(18px, 4vw, 26px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .sub {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .button {
+      min-height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,.07);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .button.primary {
+      border-color: rgba(240,189,101,.6);
+      background: linear-gradient(180deg, rgba(240,189,101,.28), rgba(225,64,76,.18));
+      color: #fff7e9;
+    }
+
+    .summary {
+      margin-top: 10px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(19,17,24,.72);
+    }
+
+    .summary h2 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .summary p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .contact {
+      margin-top: 18px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .contact img,
+    .screen img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .screen {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+    }
+
+    .caption {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 44px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.25;
+    }
+
+    .caption strong {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .tag {
+      flex: 0 0 auto;
+      padding: 4px 7px;
+      border: 1px solid rgba(240,189,101,.4);
+      border-radius: 999px;
+      color: var(--gold);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    @media (max-width: 720px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .button {
+        flex: 1 1 auto;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark">LC</div>
+        <div>
+          <h1>Live Casino App V2</h1>
+          <p class="sub">Static offline preview for iPhone and investor sharing.</p>
+        </div>
+      </div>
+      <nav class="actions" aria-label="Offline files">
+        <a class="button primary" href="index.html">Interactive</a>
+        <a class="button" href="static_preview/LC_App_V2_Preview_Pack.pdf">PDF</a>
+      </nav>
+    </header>
+
+    <section class="summary">
+      <h2>Offline fallback</h2>
+      <p>This version uses local PNG screens only. If an iPhone preview does not load the interactive prototype completely, open this file or the included PDF.</p>
+    </section>
+
+    <section class="contact" aria-label="Preview contact sheet">
+      <img src="static_preview/LC_App_V2_Preview_Contact_Sheet.png" alt="LC App V2 preview contact sheet">
+    </section>
+
+    <section class="grid" aria-label="Product screens">
+      <article class="screen">
+        <img src="static_preview/png/01_feed_discovery_mia_roulette.png" alt="Feed discovery screen with roulette dealer">
+        <div class="caption"><strong>Feed discovery</strong><span class="tag">B2C</span></div>
+      </article>
+      <article class="screen">
+        <img src="static_preview/png/02_watch_mode_mia_roulette.png" alt="Watch mode roulette table screen">
+        <div class="caption"><strong>Watch mode</strong><span class="tag">Live</span></div>
+      </article>
+      <article class="screen">
+        <img src="static_preview/png/03_roulette_gameplay_win_state.png" alt="Roulette gameplay win state">
+        <div class="caption"><strong>Roulette gameplay</strong><span class="tag">Game</span></div>
+      </article>
+      <article class="screen">
+        <img src="static_preview/png/04_blackjack_gameplay_win_state.png" alt="Blackjack gameplay win state">
+        <div class="caption"><strong>Blackjack gameplay</strong><span class="tag">Game</span></div>
+      </article>
+      <article class="screen">
+        <img src="static_preview/png/05_baccarat_gameplay_win_state.png" alt="Baccarat gameplay win state">
+        <div class="caption"><strong>Baccarat gameplay</strong><span class="tag">Game</span></div>
+      </article>
+      <article class="screen">
+        <img src="static_preview/png/06_dealer_profile_sofia.png" alt="Dealer profile screen">
+        <div class="caption"><strong>Dealer profile</strong><span class="tag">Social</span></div>
+      </article>
+      <article class="screen">
+        <img src="static_preview/png/07_operator_handoff.png" alt="Operator handoff screen">
+        <div class="caption"><strong>Operator handoff</strong><span class="tag">B2B</span></div>
+      </article>
+      <article class="screen">
+        <img src="static_preview/png/08_operator_pilot_insights.png" alt="Operator pilot insights screen">
+        <div class="caption"><strong>Pilot insights</strong><span class="tag">Ops</span></div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

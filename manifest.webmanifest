@@ -1,0 +1,33 @@
+{
+  "name": "LC App",
+  "short_name": "LC App",
+  "id": "./?app=1",
+  "description": "LC App is the social discovery layer for Live Casino: discover creators, follow live sessions and continue through licensed operators.",
+  "start_url": "./?app=1",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#08080b",
+  "theme_color": "#08080b",
+  "icons": [
+    {
+      "src": "app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "static_preview/LC_App_V2_Preview_Contact_Sheet.png",
+      "sizes": "2200x3200",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

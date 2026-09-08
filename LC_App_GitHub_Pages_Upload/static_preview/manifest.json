@@ -1,0 +1,42 @@
+[
+  {
+    "file": "01_feed_discovery_mia_roulette.png",
+    "title": "Feed Discovery",
+    "subtitle": "Instagram-like entry into live roulette with dealer identity, table state, and watch-first CTA."
+  },
+  {
+    "file": "02_watch_mode_mia_roulette.png",
+    "title": "Watch Mode",
+    "subtitle": "Expanded table view that preserves dealer context while showing stakes, table state, and instant operator entry."
+  },
+  {
+    "file": "03_roulette_gameplay_win_state.png",
+    "title": "Roulette Gameplay",
+    "subtitle": "In-table roulette flow with chips, bet map, round history, and a visible win-state settlement."
+  },
+  {
+    "file": "04_blackjack_gameplay_win_state.png",
+    "title": "Blackjack Gameplay",
+    "subtitle": "Decision-heavy blackjack seat flow with cards, action controls, hand summary, and resolved payout state."
+  },
+  {
+    "file": "05_baccarat_gameplay_win_state.png",
+    "title": "Baccarat Gameplay",
+    "subtitle": "Trend-led baccarat screen with side selection, roadmap behavior, and instant result visibility."
+  },
+  {
+    "file": "06_dealer_profile_sofia.png",
+    "title": "Dealer Profile",
+    "subtitle": "Follow-first dealer surface designed to deepen return loops and make tables feel personal, not anonymous."
+  },
+  {
+    "file": "07_operator_handoff.png",
+    "title": "Operator Handoff",
+    "subtitle": "LC App hands off to the licensed operator for login, KYC, wallet, and final game session ownership."
+  },
+  {
+    "file": "08_operator_pilot_insights.png",
+    "title": "Pilot Insights",
+    "subtitle": "B2B proof layer showing how feed discovery converts into operator join-rate and revenue logic."
+  }
+]

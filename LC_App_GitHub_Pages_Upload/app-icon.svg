@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="LC App">
+  <defs>
+    <linearGradient id="bg" x1="66" y1="58" x2="446" y2="456" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5f1118"/>
+      <stop offset=".48" stop-color="#151016"/>
+      <stop offset="1" stop-color="#071f18"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="132" y1="118" x2="390" y2="398" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffe39a"/>
+      <stop offset=".52" stop-color="#f1c760"/>
+      <stop offset="1" stop-color="#b7772d"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <rect x="42" y="42" width="428" height="428" rx="86" fill="none" stroke="url(#gold)" stroke-width="12" opacity=".72"/>
+  <circle cx="392" cy="122" r="26" fill="#2ee6ce"/>
+  <path d="M136 139v234h145v-54h-83V139h-62Z" fill="url(#gold)"/>
+  <path d="M299 139c-56 0-95 39-95 95v44c0 58 39 95 96 95 42 0 74-19 91-52l-50-28c-8 16-21 26-40 26-23 0-38-15-38-42v-41c0-27 15-43 38-43 19 0 32 10 40 26l50-29c-17-33-50-51-92-51Z" fill="#fff7e9" opacity=".94"/>
+</svg>
