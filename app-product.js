@@ -1891,6 +1891,13 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
   }
 
   document.addEventListener("submit", handleSubmit, true);
+  document.addEventListener("pointerdown", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target?.closest("[data-lc-product],[data-lc-business-view]")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void handleClick(event);
+  }, true);
   document.addEventListener("click", handleClick, true);
   window.addEventListener("offline", syncConnectivity);
   window.addEventListener("online", () => {
