@@ -218,6 +218,15 @@
     });
   }
 
+  function handleDemoSwitch(event) {
+    const button = event.target.closest?.("[data-lc-demo-switch]");
+    if (!button) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (window.location.hash !== "#/product") window.location.hash = "#/product";
+    else window.LCAppProduct?.mountDemoEntry?.();
+  }
+
   function ensureLoadingBar() {
     if (document.getElementById(LOAD_ID)) return;
     const bar = document.createElement("div");
@@ -301,6 +310,7 @@
   const observer = new MutationObserver(scheduleUpgrade);
   observer.observe(document.documentElement, { childList:true, subtree:true, attributes:true, attributeFilter:["class","hidden","disabled","aria-hidden"] });
 
+  document.addEventListener("click", handleDemoSwitch, true);
   document.addEventListener("scroll", (event) => {
     if (event.target === productRoot()) requestAnimationFrame(syncScrollState);
   }, true);
