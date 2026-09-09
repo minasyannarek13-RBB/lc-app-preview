@@ -1568,6 +1568,35 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     }
   }
 
+  async function navigateProduct(value) {
+    if (["overview", "creators", "campaigns", "live", "performance", "integrations", "safety", "settings"].includes(value)) {
+      state.businessView = value;
+      return renderIndustryHome(value);
+    }
+    if (["profile", "account"].includes(value)) {
+      state.socialView = "profile";
+      return renderAccount();
+    }
+    if (["explore", "discover"].includes(value)) {
+      await loadCreators();
+      state.socialView = "explore";
+      return renderSocialExplore();
+    }
+    if (["create", "creator"].includes(value)) {
+      state.socialView = "create";
+      return renderSocialCreate();
+    }
+    if (value === "activity") {
+      state.socialView = "activity";
+      return renderSocialActivity();
+    }
+    if (value === "home") {
+      state.socialView = "home";
+      return renderPlayerHome();
+    }
+    return routeHome();
+  }
+
   async function handleClick(event) {
     const target = event.target;
     const persona = target.closest("[data-lc-persona]");
@@ -1602,7 +1631,6 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     try {
       if (businessView) {
         event.preventDefault();
-        event.stopImmediatePropagation();
         state.businessView = businessView.dataset.lcBusinessView;
         renderIndustryHome(state.businessView);
         return;
@@ -1724,7 +1752,6 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
       }
       if (nav) {
         event.preventDefault();
-        event.stopImmediatePropagation();
         const value = nav.dataset.lcProduct;
         if (["profile", "account"].includes(value)) {
           state.socialView = "profile";
@@ -1891,18 +1918,11 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
   }
 
   document.addEventListener("submit", handleSubmit, true);
-  document.addEventListener("pointerdown", (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target?.closest("[data-lc-product],[data-lc-business-view]")) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    void handleClick(event);
-  }, true);
   document.addEventListener("click", handleClick, true);
   window.addEventListener("offline", syncConnectivity);
   window.addEventListener("online", () => {
     syncConnectivity();
     if (state.loadError) retryLoad(null, true);
   });
-  window.LCAppProduct = { mount, mountDemoEntry, clear };
+  window.LCAppProduct = { mount, mountDemoEntry, clear, navigate: navigateProduct };
 })();

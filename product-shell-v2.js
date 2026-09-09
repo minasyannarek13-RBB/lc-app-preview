@@ -154,6 +154,11 @@
         nav.replaceChildren(...BUSINESS_NAV.map((item) => buildNavButton(item, "business")));
       }
       nav.querySelectorAll("[data-lc-business-view]").forEach((button) => {
+        button.onclick = (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void window.LCAppProduct?.navigate?.(button.dataset.lcBusinessView);
+        };
         const active = button.dataset.lcBusinessView === activeNav();
         button.classList.toggle("active", active);
         if (active) button.setAttribute("aria-current", "page");
@@ -185,6 +190,11 @@
 
     buttons.forEach((button) => {
       const id = button.dataset.lcProduct;
+      button.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void window.LCAppProduct?.navigate?.(id);
+      };
       button.classList.toggle("active", active === id);
       if (active === id) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
