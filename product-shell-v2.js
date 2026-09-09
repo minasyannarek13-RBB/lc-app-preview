@@ -145,7 +145,14 @@
 
     const nav = rail.querySelector(".lc-v2-rail-nav");
     if (nav) {
-      nav.replaceChildren(...BUSINESS_NAV.map((item) => buildNavButton(item, "business")));
+      const expectedIds = BUSINESS_NAV.map(([id]) => id);
+      const currentButtons = Array.from(nav.querySelectorAll(":scope > button[data-lc-business-view]"));
+      const currentIds = currentButtons.map((button) => button.dataset.lcBusinessView);
+      const structureMatches = currentIds.length === expectedIds.length
+        && currentIds.every((id, index) => id === expectedIds[index]);
+      if (!structureMatches) {
+        nav.replaceChildren(...BUSINESS_NAV.map((item) => buildNavButton(item, "business")));
+      }
       nav.querySelectorAll("[data-lc-business-view]").forEach((button) => {
         const active = button.dataset.lcBusinessView === activeNav();
         button.classList.toggle("active", active);
@@ -165,22 +172,23 @@
     if (productFamily() !== "social") return;
     const tabs = root.querySelector(".lc-product-tabs");
     if (!tabs) return;
-    const existing = new Map(Array.from(tabs.querySelectorAll("button[data-lc-product]"), button => [button.dataset.lcProduct, button]));
     const active = activeNav();
-    const fragment = document.createDocumentFragment();
+    const expectedIds = SOCIAL_NAV.map(([id]) => id);
+    let buttons = Array.from(tabs.querySelectorAll(":scope > button[data-lc-product]"));
+    const currentIds = buttons.map((button) => button.dataset.lcProduct);
+    const structureMatches = currentIds.length === expectedIds.length
+      && currentIds.every((id, index) => id === expectedIds[index]);
+    if (!structureMatches) {
+      tabs.replaceChildren(...SOCIAL_NAV.map((item) => buildNavButton(item, "social")));
+      buttons = Array.from(tabs.querySelectorAll(":scope > button[data-lc-product]"));
+    }
 
-    SOCIAL_NAV.forEach(([id, icon, label]) => {
-      let button;
-      button = existing.get(id) || document.createElement("button");
-      button.type = "button";
-      button.dataset.lcProduct = id;
-      button.innerHTML = `<span class="lc-v4-social-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
+    buttons.forEach((button) => {
+      const id = button.dataset.lcProduct;
       button.classList.toggle("active", active === id);
       if (active === id) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
-      fragment.appendChild(button);
     });
-    tabs.replaceChildren(fragment);
     tabs.setAttribute("aria-label", "Social app navigation");
   }
 
