@@ -223,8 +223,12 @@
     if (!button) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (window.location.hash !== "#/product") window.location.hash = "#/product";
-    else window.LCAppProduct?.mountDemoEntry?.();
+    if (window.location.hash !== "#/product") {
+      window.location.hash = "#/product";
+      window.location.reload();
+    } else {
+      window.LCAppProduct?.mountDemoEntry?.();
+    }
   }
 
   function primeDemoPersonaRoute(event) {
