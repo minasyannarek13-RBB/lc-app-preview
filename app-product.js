@@ -496,13 +496,10 @@
     const current = state.current?.persona || "start";
     const creatorReady = Boolean(state.creator?.onboarding_completed);
     const playerReady = Boolean(state.player?.onboarding_completed);
-    const items = [
-      ["home", current === "creator" ? "Creator" : current === "industry" ? "Industry" : "Discover"],
-      ["discover", "Creators"],
-      ["creator", "Create"],
-      ["account", "Account"]
-    ];
-    return `<div class="lc-product-tabs">${items.map(([id, label]) => {
+    const items = current === "player"
+      ? [["home", "Discover"], ["discover", "Following"], ["creator", "Create"], ["account", "Profile"]]
+      : [["home", current === "creator" ? "Creator" : current === "industry" ? "Industry" : "Home"], ["discover", "Discover"], ["creator", "Create"], ["account", "Profile"]];
+    return `<div class="lc-product-tabs" aria-label="Primary navigation">${items.map(([id, label]) => {
       const disabled = (id === "creator" && !creatorReady) || (id === "discover" && !playerReady && current === "player");
       return `<button class="${active === id ? "active" : ""}" type="button" data-lc-product="${id}" ${disabled ? "disabled" : ""}>${label}</button>`;
     }).join("")}</div>`;
@@ -665,12 +662,29 @@
   }
 
   function renderPlayerOnboarding() {
-    shell().innerHTML = `${top("Player setup", "Personalize discovery.")}
-      <form class="lc-product-stack lc-product-form" data-lc-form="player">
-        <section class="lc-product-card lc-product-hero"><span class="lc-product-label">Player</span><h1>Find who you want to play with.</h1><p>Choose games and languages so LC App can suggest creators deterministically.</p></section>
-        <section class="lc-product-card"><h2>Favorite games</h2>${checks("games", games, state.player?.favorite_games)}</section>
-        <section class="lc-product-card"><h2>Preferred languages</h2>${checks("languages", languages, state.player?.preferred_languages)}</section>
-        <button class="lc-product-btn" type="submit">START EXPLORING</button>
+    const selectedGames = state.player?.favorite_games || [];
+    const selectedLanguages = state.player?.preferred_languages || [];
+    shell().innerHTML = `${top("Welcome", "Build your creator-first Live Casino feed")}
+      <form class="lc-product-stack lc-product-form lc-v3-onboarding" data-lc-form="player">
+        <section class="lc-v3-onboarding-hero">
+<span class="lc-v3-kicker">PLAYER SETUP · 1 MINUTE</span>
+<h1>Who do you want to come back for?</h1>
+<p>LC uses your game and language preferences to rank creators. You can change these later.</p>
+<div class="lc-v3-progress"><span></span><span></span><span></span></div>
+        </section>
+        <section class="lc-product-card lc-v3-preference-card">
+<div class="lc-product-section-head"><div><span class="lc-v3-step">01</span><h2>Games you actually play</h2></div><span>${selectedGames.length ? `${selectedGames.length} selected` : "Choose at least one"}</span></div>
+<p>Used only for creator discovery ranking. It does not change gameplay or casino access.</p>
+<div class="lc-v3-choice-wrap">${checks("games", games, selectedGames)}</div>
+        </section>
+        <section class="lc-product-card lc-v3-preference-card">
+<div class="lc-product-section-head"><div><span class="lc-v3-step">02</span><h2>Languages you prefer</h2></div><span>${selectedLanguages.length ? `${selectedLanguages.length} selected` : "Choose at least one"}</span></div>
+<p>Helps surface creators you can comfortably follow across sessions.</p>
+<div class="lc-v3-choice-wrap">${checks("languages", languages, selectedLanguages)}</div>
+        </section>
+        <section class="lc-v3-value-strip"><div><b>Discover people</b><span>Not anonymous tables</span></div><div><b>Follow creators</b><span>Keep the relationship</span></div><div><b>Return when Live</b><span>Build continuity</span></div></section>
+        <button class="lc-product-btn lc-v3-primary-wide" type="submit">BUILD MY DISCOVER FEED</button>
+        <span class="lc-product-note lc-v3-center-note">No wallet, wagering, KYC or deposits are handled by LC App.</span>
       </form>`;
   }
 
@@ -838,18 +852,44 @@
 
   function renderPlayerHome() {
     const creators = suggestedCreators();
-    const lead = creators[0];
-    const filterLabels = { for_you: "For you", live: "Live", following: "Following", upcoming: "Starting soon" };
-    const emptyCopy = state.discoveryFilter === "live" ? "No Creators are live right now. Follow people to receive their next Live signal." : state.discoveryFilter === "following" ? "You are not following anyone in this view yet. Switch to For you and choose a Creator." : state.discoveryFilter === "upcoming" ? "No scheduled sessions match this view." : "No Creators match this search yet.";
-    shell().innerHTML = `${top("Discover", "Creator-first Live Casino")}
-      <div class="lc-product-stack">
-        ${visualHero("Discover", lead ? "Find the person behind the table." : "Discover creators.", "Casino was built around games. LC is built around people.", visualImage(lead?.profile), lead ? `<button class="lc-product-btn" type="button" data-lc-open-creator="${safe(lead.profile.id)}">Open creator</button>${lead.sessions[0] ? `<button class="lc-product-btn secondary" type="button" data-lc-live="${safe(lead.sessions[0].id)}">${lead.sessions[0].status === "live" ? "Live now" : "View session"}</button>` : ""}` : "", "compact")}
-        <section class="lc-product-card"><div class="lc-product-flow"><span>Discover</span><span>Creator</span><span>Follow</span><span>Live</span><span>Return</span></div></section>
-        <form class="lc-product-card lc-product-form" data-lc-form="search"><input class="lc-product-input" name="search" maxlength="80" placeholder="Search creators, games, live rooms..." value="${safe(state.search)}"><div class="lc-product-actions"><button class="lc-product-btn secondary" type="submit">SEARCH</button>${state.search ? `<button class="lc-product-chip" type="button" data-lc-clear-search>Clear</button>` : ""}</div></form>
-        <section class="lc-product-card"><div class="lc-product-section-head"><h2>Creator feed</h2><span>${safe(filterLabels[state.discoveryFilter] || "For you")}</span></div><div class="lc-product-actions">${Object.entries(filterLabels).map(([value, label]) => `<button class="lc-product-chip ${state.discoveryFilter === value ? "active" : ""}" type="button" data-lc-discovery-filter="${safe(value)}">${safe(label)}</button>`).join("")}</div>${compactCreatorRows(creators, emptyCopy)}</section>
-        ${renderSavedSchedule()}
-        ${renderNotifications()}
-        ${creators.slice(0, 4).map(creatorCard).join("")}
+    const liveCreators = creators.filter((item) => item.sessions[0]?.status === "live");
+    const upcomingCreators = creators.filter((item) => item.sessions[0]?.status === "scheduled");
+    const lead = liveCreators[0] || creators[0];
+    const leadSession = lead?.sessions?.[0];
+    const filterLabels = { for_you: "For you", live: "Live now", following: "Following", upcoming: "Starting soon" };
+    const emptyCopy = state.discoveryFilter === "live" ? "Nobody you can access is Live right now. Follow creators and come back when they start a session." : state.discoveryFilter === "following" ? "You are not following anyone in this view yet. Discover a creator first." : state.discoveryFilter === "upcoming" ? "No upcoming creator sessions match this view." : "No creators match this search yet.";
+    const unread = state.notifications.filter((item) => !item.read_at).length;
+    shell().innerHTML = `${top("Discover", unread ? `${unread} new signal${unread === 1 ? "" : "s"}` : "Live Casino through people")}
+      <div class="lc-product-stack lc-v3-player-home">
+        ${lead ? `<section class="lc-v3-featured">
+<img src="${safe(visualImage(lead.profile))}" alt="">
+<div class="lc-v3-featured-shade"></div>
+<div class="lc-v3-featured-top"><span class="lc-v3-live-pill ${leadSession?.status === "live" ? "is-live" : ""}">${safe(sessionStatusLabel(leadSession))}</span><span>${safe((lead.creator.languages || []).slice(0,2).join(" · ") || "Creator")}</span></div>
+<div class="lc-v3-featured-copy"><span class="lc-v3-kicker">FEATURED FOR YOU</span><h1>${safe(profileName(lead.profile))}</h1><p>${safe(lead.creator.headline || "Live Casino creator")} · ${safe((lead.creator.games || []).join(" · ") || "Live Casino")}</p>
+<div class="lc-product-actions"><button class="lc-product-btn" type="button" data-lc-open-creator="${safe(lead.profile.id)}">VIEW CREATOR</button>${leadSession ? `<button class="lc-product-btn secondary" type="button" data-lc-live="${safe(leadSession.id)}">${leadSession.status === "live" ? "JOIN LIVE" : "VIEW SCHEDULE"}</button>` : ""}</div></div>
+        </section>` : `<section class="lc-product-card lc-product-empty"><h2>Your creator feed is empty</h2><p>Adjust your preferences or return when creators become available.</p></section>`}
+
+        <section class="lc-v3-discovery-tools">
+<div class="lc-v3-filter-row">${Object.entries(filterLabels).map(([value, label]) => `<button class="lc-v3-filter ${state.discoveryFilter === value ? "active" : ""}" type="button" data-lc-discovery-filter="${safe(value)}">${safe(label)}</button>`).join("")}</div>
+<form class="lc-v3-search" data-lc-form="search"><input class="lc-product-input" name="search" maxlength="80" aria-label="Search creators" placeholder="Search creator, game or language" value="${safe(state.search)}"><button class="lc-v3-search-btn" type="submit">Search</button>${state.search ? `<button class="lc-product-chip" type="button" data-lc-clear-search>Clear</button>` : ""}</form>
+        </section>
+
+        ${liveCreators.length ? `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">LIVE NOW</span><h2>People you can join now</h2></div><span>${liveCreators.length} live</span></div><div class="lc-v3-live-grid">${liveCreators.slice(0,3).map((item) => {
+const session = item.sessions[0];
+return `<article class="lc-v3-live-card"><img src="${safe(visualImage(item.profile))}" alt=""><div class="lc-v3-live-card-shade"></div><div class="lc-v3-live-card-copy"><span class="lc-v3-live-pill is-live">LIVE</span><h3>${safe(profileName(item.profile))}</h3><p>${safe(session?.game || "Live Casino")} · ${safe(session?.operator_name || "Operator to be confirmed")}</p><button type="button" data-lc-live="${safe(session.id)}">Open Live</button></div></article>`;
+        }).join("")}</div></section>` : ""}
+
+        <section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">${safe(filterLabels[state.discoveryFilter] || "FOR YOU").toUpperCase()}</span><h2>${state.search ? "Search results" : "Creators worth following"}</h2></div><span>${creators.length}</span></div>
+<div class="lc-v3-creator-list">${creators.length ? creators.slice(0,8).map((item) => {
+  const next = item.sessions[0];
+  const following = state.follows.has(item.profile.id);
+  const reasons = creatorRecommendationReasons(item).slice(0,2);
+  return `<article class="lc-v3-creator-row"><button class="lc-v3-avatar-btn" type="button" data-lc-open-creator="${safe(item.profile.id)}"><img src="${safe(avatar(item.profile))}" alt=""></button><div class="lc-v3-creator-copy"><b>${safe(profileName(item.profile))}</b><span>${safe((item.creator.games || []).slice(0,2).join(" · ") || "Live Casino")}</span><small>${safe(reasons.join(" · ") || sessionStatusLabel(next))}</small></div><div class="lc-v3-row-actions"><button class="lc-product-chip ${following ? "active" : ""}" type="button" data-lc-follow="${safe(item.profile.id)}">${following ? "Following" : "Follow"}</button><button class="lc-v3-arrow" type="button" aria-label="Open creator" data-lc-open-creator="${safe(item.profile.id)}">›</button></div></article>`;
+}).join("") : `<div class="lc-product-empty">${safe(emptyCopy)}</div>`}</div>
+        </section>
+
+        ${upcomingCreators.length || state.reminders.size ? `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">NEXT</span><h2>Your return plan</h2></div><span>${state.reminders.size ? `${state.reminders.size} saved` : "Upcoming"}</span></div>${renderSavedSchedule()}${!state.reminders.size && upcomingCreators[0] ? `<div class="lc-v3-suggestion"><div><b>${safe(profileName(upcomingCreators[0].profile))}</b><span>${safe(sessionLine(upcomingCreators[0].sessions[0]))}</span></div><button class="lc-product-chip" type="button" data-lc-open-creator="${safe(upcomingCreators[0].profile.id)}">View</button></div>` : ""}</section>` : ""}
+        ${state.notifications.length ? `<section class="lc-v3-section lc-v3-notifications"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">ACTIVITY</span><h2>Signals</h2></div><span>${unread ? `${unread} unread` : "Caught up"}</span></div>${renderNotifications()}</section>` : ""}
       </div>${tabs("home")}`;
     creators.slice(0, 10).forEach((item, index) => void trackProductEvent("creator_impression", { creatorId: item.profile.id, dedupeKey: `impression:${state.discoveryFilter}:${item.profile.id}`, metadata: { surface: "creator_feed", position: index + 1, filter: state.discoveryFilter, recommendation_reasons: creatorRecommendationReasons(item).slice(0, 4) } }));
   }
@@ -961,15 +1001,29 @@
     if (!item) return renderMissing("Creator unavailable", "This creator is not available in the current context.", "Back to Discover");
     state.selectedCreator = id;
     void trackProductEvent("creator_profile_open", { creatorId: id, dedupeKey: `profile:${id}` });
-    const post = item.posts[0];
     const next = item.sessions[0];
-    shell().innerHTML = `${top(profileName(item.profile), "Creator profile")}
-      <div class="lc-product-stack">
-        ${visualHero(sessionStatusLabel(next), profileName(item.profile), `${item.creator.headline || "Live Casino creator"} · ${(item.creator.games || []).join(", ") || "Live Casino"}`, visualImage(item.profile), `<button class="lc-product-btn secondary ${state.follows.has(item.profile.id) ? "active" : ""}" type="button" data-lc-follow="${safe(item.profile.id)}">${state.follows.has(item.profile.id) ? "Following" : "Follow"}</button>${creatorLiveAlertControl(item.profile.id)}${next ? `<button class="lc-product-btn" type="button" data-lc-live="${safe(next.id)}">${next.status === "live" ? "Watch live" : "View schedule"}</button>` : ""}`, "compact")}
-        <section class="lc-product-media-grid">${item.posts.slice(0, 3).map((p, index) => visualTile(visualImage(item.profile), "Creator content", new Date(p.created_at).toLocaleString(), p.body, index === 0)).join("")}</section>
-        <section class="lc-product-card"><h2>Sessions</h2>${item.sessions.length ? item.sessions.map((s) => `<div class="lc-product-row"><div class="lc-product-row-main"><b>${safe(s.game)} · ${safe(s.title || "Live session")}</b><span>${safe(s.operator_name || "Operator to be confirmed")} · ${safe(sessionLine(s))}</span></div>${s.status === "scheduled" ? `<button class="lc-product-chip ${state.reminders.has(s.id) ? "active" : ""}" type="button" data-lc-reminder="${safe(s.id)}">${state.reminders.has(s.id) ? "Reminder set" : "Remind me"}</button>` : `<button class="lc-product-chip active" type="button" data-lc-live="${safe(s.id)}">Open Live</button>`}</div>`).join("") : `<div class="lc-product-empty">No upcoming sessions. Follow the creator or return to Discover.</div>`}</section>
-        ${post ? `<section class="lc-product-card"><form class="lc-product-form" data-lc-form="comment" data-post-id="${safe(post.id)}"><input class="lc-product-input" name="body" maxlength="1000" placeholder="Comment on latest post"><button class="lc-product-btn secondary" type="submit">COMMENT</button></form></section>` : ""}
-        ${state.demo ? "" : `<section class="lc-product-card"><div class="lc-product-section-head"><h2>Safety</h2><span>Private controls</span></div><p>Report harmful content for review or block this Creator from your discovery experience.</p><div class="lc-product-actions"><button class="lc-product-chip" type="button" data-lc-creator-safety="report" data-lc-creator-id="${safe(id)}">Report</button><button class="lc-product-chip" type="button" data-lc-creator-safety="block" data-lc-creator-id="${safe(id)}">Block</button></div></section>`}
+    const isLive = next?.status === "live";
+    const following = state.follows.has(item.profile.id);
+    const gamesLabel = (item.creator.games || []).join(" · ") || "Live Casino";
+    const languageLabel = (item.creator.languages || item.profile.languages || []).join(" · ") || "Language not listed";
+    shell().innerHTML = `${top(profileName(item.profile), isLive ? "Live now" : "Creator profile")}
+      <div class="lc-product-stack lc-v3-creator-profile">
+        <section class="lc-v3-profile-hero">
+<img class="lc-v3-profile-cover" src="${safe(visualImage(item.profile))}" alt=""><div class="lc-v3-featured-shade"></div>
+<div class="lc-v3-profile-status"><span class="lc-v3-live-pill ${isLive ? "is-live" : ""}">${safe(sessionStatusLabel(next))}</span></div>
+<div class="lc-v3-profile-copy"><h1>${safe(profileName(item.profile))}</h1><p>${safe(item.creator.headline || "Live Casino creator")}</p><div class="lc-v3-meta-line"><span>${safe(gamesLabel)}</span><span>${safe(languageLabel)}</span>${item.profile.country ? `<span>${safe(item.profile.country)}</span>` : ""}</div></div>
+        </section>
+        <section class="lc-v3-profile-actions"><button class="lc-product-btn ${following ? "secondary active" : ""}" type="button" data-lc-follow="${safe(item.profile.id)}">${following ? "FOLLOWING" : "FOLLOW"}</button>${creatorLiveAlertControl(item.profile.id)}${next ? `<button class="lc-product-btn" type="button" data-lc-live="${safe(next.id)}">${isLive ? `PLAY WITH ${safe(profileName(item.profile)).toUpperCase()}` : "VIEW NEXT SESSION"}</button>` : ""}</section>
+
+        <section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">ABOUT</span><h2>Why follow ${safe(profileName(item.profile))}</h2></div></div><p class="lc-v3-body-copy">${safe(item.profile.bio || item.creator.headline || "Follow this creator to keep their identity, schedule and Live status connected across sessions.")}</p><div class="lc-v3-identity-strip"><span>${safe(item.creator.affiliation_name || "Affiliation not listed")}</span><span>${safe(item.creator.affiliation_verification_status || "unverified")}</span></div></section>
+
+        ${next ? `<section class="lc-v3-next-session"><div><span class="lc-v3-kicker">${isLive ? "LIVE SESSION" : "NEXT SESSION"}</span><h2>${safe(next.game)} · ${safe(next.title || "Live session")}</h2><p>${safe(next.operator_name || "Operator to be confirmed")} · ${safe(sessionLine(next))}</p></div><div class="lc-product-actions">${isLive ? `<button class="lc-product-btn" type="button" data-lc-live="${safe(next.id)}">OPEN LIVE</button>` : `<button class="lc-product-btn ${state.reminders.has(next.id) ? "secondary" : ""}" type="button" data-lc-reminder="${safe(next.id)}">${state.reminders.has(next.id) ? "REMINDER SET" : "REMIND ME"}</button>`}</div></section>` : `<section class="lc-product-card lc-product-empty"><h2>No session scheduled</h2><p>Follow this creator to keep them in your feed when a new session appears.</p></section>`}
+
+        ${item.posts.length ? `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">CONTENT</span><h2>Recent updates</h2></div><span>${item.posts.length}</span></div><div class="lc-v3-content-grid">${item.posts.slice(0,3).map((p, index) => `<article class="lc-v3-content-card ${index === 0 ? "featured" : ""}"><img src="${safe(visualImage(item.profile))}" alt=""><div><small>${safe(new Date(p.created_at).toLocaleString())}</small><p>${safe(p.body)}</p></div></article>`).join("")}</div></section>` : ""}
+
+        ${item.sessions.length > 1 ? `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">SCHEDULE</span><h2>Upcoming</h2></div></div>${item.sessions.slice(1).map((s) => `<div class="lc-v3-session-row"><div><b>${safe(s.game)} · ${safe(s.title || "Live session")}</b><span>${safe(sessionLine(s))}</span></div>${s.status === "scheduled" ? `<button class="lc-product-chip ${state.reminders.has(s.id) ? "active" : ""}" type="button" data-lc-reminder="${safe(s.id)}">${state.reminders.has(s.id) ? "Saved" : "Remind me"}</button>` : `<button class="lc-product-chip" type="button" data-lc-live="${safe(s.id)}">Open</button>`}</div>`).join("")}</section>` : ""}
+
+        ${!state.demo ? `<section class="lc-v3-safety-footer"><button type="button" data-lc-creator-safety="report" data-lc-creator-id="${safe(id)}">Report</button><span>·</span><button type="button" data-lc-creator-safety="block" data-lc-creator-id="${safe(id)}">Block</button></section>` : ""}
       </div>${tabs("discover")}`;
   }
 
@@ -998,16 +1052,25 @@
     const found = findSessionEntry(sessionId);
     const item = found?.entry;
     const session = found?.session;
-    if (!item || !session) return renderMissing("Session unavailable", "This live context is no longer available.", "Back to Discover");
+    if (!item || !session) return renderMissing("Session unavailable", "This Live context is no longer available.", "Back to Discover");
     state.selectedCreator = item.profile.id;
     state.selectedSession = session.id;
     void trackProductEvent("live_session_open", { creatorId: item.profile.id, sessionId: session.id, dedupeKey: `live:${session.id}` });
     const isLive = session.status === "live";
-    shell().innerHTML = `${top(isLive ? "Live" : "Schedule", isLive ? "Creator-led intent before operator handoff" : "Plan a return for this Creator")}
-      <div class="lc-product-stack">
-        ${visualHero(sessionStatusLabel(session), `${session.game} with ${profileName(item.profile)}`, isLive ? "Creator identity, follow state and live context build intent before the player continues to the licensed operator." : `${sessionLine(session)}. Save this session and return when the Creator is Live.`, visualImage(item.profile), `${isLive ? `<button class="lc-product-btn" type="button" data-lc-product="handoff">Play with ${safe(profileName(item.profile))}</button>` : `<button class="lc-product-btn ${state.reminders.has(session.id) ? "secondary" : ""}" type="button" data-lc-reminder="${safe(session.id)}">${state.reminders.has(session.id) ? "Reminder set" : "Remind me"}</button>`}<button class="lc-product-btn secondary ${state.follows.has(item.profile.id) ? "active" : ""}" type="button" data-lc-follow="${safe(item.profile.id)}">${state.follows.has(item.profile.id) ? "Following" : "Follow"}</button>`, "compact copy-top")}
-        <section class="lc-product-card"><div class="lc-product-section-head"><h2>Continuity is the product</h2><span>Relationship before transaction</span></div><div class="lc-product-flow"><span>Discover</span><span>Follow</span><span>Schedule</span><span>Live intent</span><span>Return</span></div><p style="margin-top:10px">Profile, follow, schedule and social context are one mechanism: they turn a one-off table encounter into a reason to find the same person again.</p></section>
-        <section class="lc-product-card"><h2>LC stops at the casino boundary</h2><p>LC keeps creator identity, follow state, schedule and return context. The licensed operator keeps gameplay, wallet, KYC/AML, responsible gaming, wagering and settlement.</p><span class="lc-product-note">${state.demo ? "Demo handoff only." : "Conceptual handoff only."} No confirmed operator/provider integration.</span></section>
+    const following = state.follows.has(item.profile.id);
+    shell().innerHTML = `${top(isLive ? "Live now" : "Upcoming", profileName(item.profile))}
+      <div class="lc-product-stack lc-v3-live-screen">
+        <section class="lc-v3-live-stage">
+<img src="${safe(visualImage(item.profile))}" alt=""><div class="lc-v3-featured-shade"></div>
+<div class="lc-v3-live-stage-top"><span class="lc-v3-live-pill ${isLive ? "is-live" : ""}">${safe(sessionStatusLabel(session))}</span><span>${safe(session.game)}</span></div>
+<div class="lc-v3-live-stage-copy"><span class="lc-v3-kicker">${safe(session.operator_name || "Operator to be confirmed")}</span><h1>${safe(profileName(item.profile))}</h1><p>${safe(session.title || "Live table session")} · ${safe(new Date(session.starts_at).toLocaleString())}</p></div>
+        </section>
+        <section class="lc-v3-live-cta">
+${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data-lc-product="handoff">CONTINUE TO PLAY WITH ${safe(profileName(item.profile)).toUpperCase()}</button>` : `<button class="lc-product-btn lc-v3-primary-wide ${state.reminders.has(session.id) ? "secondary" : ""}" type="button" data-lc-reminder="${safe(session.id)}">${state.reminders.has(session.id) ? "REMINDER SET" : "REMIND ME WHEN IT STARTS"}</button>`}
+<button class="lc-product-btn secondary ${following ? "active" : ""}" type="button" data-lc-follow="${safe(item.profile.id)}">${following ? "FOLLOWING" : "FOLLOW CREATOR"}</button>
+        </section>
+        <section class="lc-v3-context-card"><span class="lc-v3-kicker">WHY THIS SCREEN EXISTS</span><h2>Keep the person, not just the table.</h2><p>LC connects creator identity, follow state, schedule and Live intent. The licensed operator remains responsible for gameplay and the regulated transaction.</p><div class="lc-v3-boundary-grid"><div><b>LC keeps</b><span>Creator · Follow · Schedule · Return context</span></div><div><b>Operator keeps</b><span>Game · Wallet · KYC/AML · Wagering · Settlement</span></div></div></section>
+        <button class="lc-v3-text-link" type="button" data-lc-open-creator="${safe(item.profile.id)}">View ${safe(profileName(item.profile))}'s profile</button>
       </div>${tabs("discover")}`;
   }
 
@@ -1019,10 +1082,12 @@
     state.selectedCreator = entry.profile.id;
     state.selectedSession = session.id;
     void trackProductEvent("handoff_intent", { creatorId: entry.profile.id, sessionId: session.id, confidence: "direct", dedupeKey: `handoff:${session.id}` });
-    shell().innerHTML = `${top("Operator handoff", "Conceptual external flow")}
-      <div class="lc-product-stack">
-        ${visualHero(state.demo ? "Demo handoff" : "Conceptual handoff", "Continue with the operator.", "The licensed operator controls gameplay, wallet, KYC/AML, responsible gaming, bet acceptance and settlement.", visualImage(entry.profile), `<button class="lc-product-btn" type="button" data-lc-return-live="${safe(session.id)}">Return to LC App</button><button class="lc-product-btn secondary" type="button" data-lc-open-creator="${safe(entry.profile.id)}">Creator profile</button>`, "compact copy-top")}
-        <section class="lc-product-card"><div class="lc-product-section-head"><h2>The handoff is the proof</h2><span>LC creates intent, operator completes play</span></div><div class="lc-product-flow"><span>Discover</span><span>Creator</span><span>Intent</span><span>Operator</span><span>Return</span></div><p style="margin-top:10px">The product proof is the handoff itself: LC creates identifiable creator-led intent, the operator keeps the regulated transaction, and LC can preserve the social context needed for a return loop.</p><span class="lc-product-note">No deposits, wagering, KYC, AML, wallet or settlement data passes through LC.</span></section><section class="lc-product-card lc-product-hero"><span class="lc-product-label">Closed loop</span><h1>A table session ends. The creator relationship can persist.</h1><p>Live Casino through people.</p></section>
+    shell().innerHTML = `${top("Continue to operator", `${session.game} with ${profileName(entry.profile)}`)}
+      <div class="lc-product-stack lc-v3-handoff">
+        <section class="lc-v3-handoff-hero"><img src="${safe(visualImage(entry.profile))}" alt=""><div class="lc-v3-featured-shade"></div><div class="lc-v3-handoff-copy"><span class="lc-v3-live-pill is-live">LIVE</span><h1>You are leaving LC App to play.</h1><p>${safe(profileName(entry.profile))} · ${safe(session.game)} · ${safe(session.operator_name || "Operator to be confirmed")}</p></div></section>
+        <section class="lc-v3-handoff-boundary"><div class="lc-v3-boundary-icon">LC</div><div><b>LC creates and measures the handoff intent.</b><span>Gameplay, money movement, KYC/AML and responsible-gaming controls stay with the licensed operator.</span></div></section>
+        <section class="lc-v3-handoff-actions"><button class="lc-product-btn lc-v3-primary-wide" type="button" data-lc-return-live="${safe(session.id)}">SIMULATE OPERATOR RETURN</button><button class="lc-product-btn secondary" type="button" data-lc-open-creator="${safe(entry.profile.id)}">BACK TO CREATOR</button><span class="lc-product-note">${state.demo ? "Demo flow only." : "Conceptual handoff only."} No production operator integration is claimed.</span></section>
+        <section class="lc-v3-context-card"><span class="lc-v3-kicker">RETURN LOOP</span><h2>The game session can end. The creator relationship does not have to.</h2><p>When the player returns, LC can preserve who drove the intent and reconnect the player with the same creator, follow state and future schedule.</p></section>
       </div>${tabs("discover")}`;
   }
 
@@ -1034,15 +1099,16 @@
   }
 
   function renderAccount() {
-    shell().innerHTML = `${top("Account", "Experience and profile")}
-      <div class="lc-product-stack">
-        <section class="lc-product-card"><div class="lc-product-row"><img src="${safe(avatar(state.profile))}" alt=""><div class="lc-product-row-main"><b>${safe(profileName(state.profile))}</b><span>${safe(state.profile.username ? "@" + state.profile.username : state.profile.id)}</span></div></div></section>
-        <section class="lc-product-card"><h2>Current experience</h2><p>${safe(state.current?.persona || "none")} ${state.current?.industry_subtype ? "· " + safe(state.current.industry_subtype) : ""}</p><div class="lc-product-actions"><button class="lc-product-chip" type="button" data-lc-persona="player">Player</button><button class="lc-product-chip" type="button" data-lc-persona="creator">Creator</button><button class="lc-product-chip" type="button" data-lc-persona="industry">Industry</button></div></section>
-        <section class="lc-product-card"><h2>Security role</h2><p>${safe(state.profile.role || "user")} stays separate from product persona.</p></section>
-        ${state.demo ? "" : `<section class="lc-product-card"><div class="lc-product-section-head"><h2>Safety</h2><span>${state.blockedIds.size} blocked</span></div><p>Review and reverse profile blocks without exposing reports or moderation decisions.</p><button class="lc-product-chip" type="button" data-lc-blocked-list>MANAGE BLOCKED CREATORS</button></section>`}
-        ${state.demo ? "" : `<section class="lc-product-card"><div class="lc-product-section-head"><h2>Live return signals</h2><span>${state.returnSignalsAvailable ? (state.liveSignalsEnabled ? "On" : "Muted") : "Backend pending"}</span></div><p>Control in-app alerts when a Creator you follow starts a verified public Live session.</p><button class="lc-product-chip ${state.liveSignalsEnabled ? "active" : ""}" type="button" data-lc-live-signals ${state.returnSignalsAvailable ? "" : "disabled"}>${state.liveSignalsEnabled ? "MUTE LIVE SIGNALS" : "ENABLE LIVE SIGNALS"}</button><span class="lc-product-note">In-app only. No email, SMS or push delivery is implied.</span></section>`}
-        ${state.demo ? "" : `<section class="lc-product-card"><h2>Profile, privacy and password</h2><p>Manage your public profile, password and account deletion request from secure account settings.</p><button class="lc-product-chip" type="button" data-auth-route="profile">OPEN ACCOUNT SETTINGS</button></section>`}
-        <section class="lc-product-card"><h2>Session</h2><p>Sign out clears the local LC App session and returns to login.</p><div class="lc-product-actions">${state.demo ? `<button class="lc-product-btn secondary" type="button" data-lc-demo-exit>BACK TO OPENING</button>` : `<button class="lc-product-btn secondary" type="button" data-auth-route="logout">SIGN OUT</button>`}</div></section>
+    const persona = state.current?.persona || "none";
+    shell().innerHTML = `${top("Profile", "Your LC App experience")}
+      <div class="lc-product-stack lc-v3-account">
+        <section class="lc-v3-account-hero"><img src="${safe(avatar(state.profile))}" alt=""><div><span class="lc-v3-kicker">ACCOUNT</span><h1>${safe(profileName(state.profile))}</h1><p>${safe(state.profile.username ? "@" + state.profile.username : "LC App user")} · ${safe(persona)}</p></div></section>
+        <section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">EXPERIENCE</span><h2>Switch perspective</h2></div></div><p class="lc-v3-body-copy">Product personas change what you see. They never change your security role.</p><div class="lc-v3-persona-switch"><button class="lc-product-chip ${persona === "player" ? "active" : ""}" type="button" data-lc-persona="player">Player</button><button class="lc-product-chip ${persona === "creator" ? "active" : ""}" type="button" data-lc-persona="creator">Creator</button><button class="lc-product-chip ${persona === "industry" ? "active" : ""}" type="button" data-lc-persona="industry">Industry</button></div></section>
+        ${persona === "player" && state.player ? `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">DISCOVERY PREFERENCES</span><h2>Your feed signals</h2></div></div><div class="lc-v3-account-pref"><div><b>Games</b><span>${safe((state.player.favorite_games || []).join(" · ") || "Not set")}</span></div><div><b>Languages</b><span>${safe((state.player.preferred_languages || []).join(" · ") || "Not set")}</span></div></div></section>` : ""}
+        ${state.demo ? "" : `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">LIVE SIGNALS</span><h2>Creator return alerts</h2></div><span>${state.returnSignalsAvailable ? (state.liveSignalsEnabled ? "On" : "Muted") : "Backend pending"}</span></div><p class="lc-v3-body-copy">In-app signals only when a followed, eligible Creator becomes Live.</p><button class="lc-product-chip ${state.liveSignalsEnabled ? "active" : ""}" type="button" data-lc-live-signals ${state.returnSignalsAvailable ? "" : "disabled"}>${state.liveSignalsEnabled ? "MUTE LIVE SIGNALS" : "ENABLE LIVE SIGNALS"}</button></section>`}
+        ${state.demo ? "" : `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">SAFETY & PRIVACY</span><h2>Account controls</h2></div></div><div class="lc-v3-settings-list"><button type="button" data-lc-blocked-list><span><b>Blocked creators</b><small>${state.blockedIds.size} blocked</small></span><i>›</i></button><button type="button" data-auth-route="profile"><span><b>Profile, password & deletion</b><small>Secure account settings</small></span><i>›</i></button></div></section>`}
+        <section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">SECURITY</span><h2>Account boundary</h2></div><span>${safe(state.profile.role || "user")}</span></div><p class="lc-v3-body-copy">Security role is separate from Player, Creator and Industry product experiences.</p></section>
+        <section class="lc-v3-signout"><button class="lc-product-btn secondary" type="button" ${state.demo ? "data-lc-demo-exit" : "data-auth-route=\"logout\""}>${state.demo ? "BACK TO OPENING" : "SIGN OUT"}</button></section>
       </div>${tabs("account")}`;
   }
 
