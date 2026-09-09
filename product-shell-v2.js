@@ -322,8 +322,8 @@
   const observer = new MutationObserver(scheduleUpgrade);
   observer.observe(document.documentElement, { childList:true, subtree:true, attributes:true, attributeFilter:["class","hidden","disabled","aria-hidden"] });
 
-  document.addEventListener("click", handleDemoSwitch, true);
-  document.addEventListener("click", handleDemoPersona, true);
+  window.addEventListener("click", handleDemoSwitch, true);
+  window.addEventListener("click", handleDemoPersona, true);
   document.addEventListener("scroll", (event) => {
     if (event.target === productRoot()) requestAnimationFrame(syncScrollState);
   }, true);
