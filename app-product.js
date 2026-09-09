@@ -1602,6 +1602,7 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     try {
       if (businessView) {
         event.preventDefault();
+        event.stopImmediatePropagation();
         state.businessView = businessView.dataset.lcBusinessView;
         renderIndustryHome(state.businessView);
         return;
@@ -1723,6 +1724,7 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
       }
       if (nav) {
         event.preventDefault();
+        event.stopImmediatePropagation();
         const value = nav.dataset.lcProduct;
         if (["profile", "account"].includes(value)) {
           state.socialView = "profile";
