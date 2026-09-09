@@ -227,6 +227,15 @@
     else window.LCAppProduct?.mountDemoEntry?.();
   }
 
+  function primeDemoPersonaRoute(event) {
+    const button = event.target.closest?.("[data-lc-demo-persona]");
+    if (!button) return;
+    const persona = button.dataset.lcDemoPersona;
+    if (!["player", "creator", "operator", "provider", "admin"].includes(persona)) return;
+    const next = `#/product/demo/${persona}`;
+    if (window.location.hash !== next) window.location.hash = next;
+  }
+
   function ensureLoadingBar() {
     if (document.getElementById(LOAD_ID)) return;
     const bar = document.createElement("div");
@@ -311,6 +320,7 @@
   observer.observe(document.documentElement, { childList:true, subtree:true, attributes:true, attributeFilter:["class","hidden","disabled","aria-hidden"] });
 
   window.addEventListener("click", handleDemoSwitch, true);
+  window.addEventListener("click", primeDemoPersonaRoute, true);
   document.addEventListener("scroll", (event) => {
     if (event.target === productRoot()) requestAnimationFrame(syncScrollState);
   }, true);
