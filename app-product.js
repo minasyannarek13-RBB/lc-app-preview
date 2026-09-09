@@ -617,7 +617,7 @@
     state.current = { id: `demo-${persona}`, persona: currentPersona, industry_subtype: industrySubtype, onboarding_status: "completed", is_current: true };
     state.profile = persona === "creator" ? demoProfile("demo-sofia") : { id: "demo-reviewer", username: "demo_reviewer", display_name: "Demo Reviewer", avatar_url: "app-icon-512.png", role: persona === "admin" ? "admin" : "user", account_status: "active", onboarding_completed: true };
     state.player = currentPersona === "player" ? { user_id: state.profile.id, favorite_games: ["Blackjack", "Roulette"], preferred_languages: ["English"], onboarding_completed: true } : null;
-    state.creator = currentPersona === "creator" ? { ...demoCreators[0], onboarding_completed: true } : null;
+    state.creator = currentPersona === "creator" ? { ...demoCreators[0], verification_status: "verified", onboarding_completed: true } : null;
     state.industry = currentPersona === "industry" ? { user_id: state.profile.id, subtype: industrySubtype, company_name: "Demo Company", job_title: "Industry reviewer", work_email: "demo@example.com", interests, access_status: "not_requested", onboarding_completed: true } : null;
     refreshDemoData();
   }
