@@ -495,10 +495,11 @@
       : state.current?.persona === "industry"
         ? (state.industry?.subtype || state.current?.industry_subtype || "operator")
         : (state.current?.persona || "persona");
+    const accountTarget = state.current?.persona === "industry" ? `data-lc-business-view="settings"` : `data-lc-product="profile"`;
     return `
       <div class="lc-product-top">
         <div class="lc-product-brand"><span class="lc-product-logo">LC</span><div><strong>${safe(title)}</strong><span>${safe(subtitle)}</span></div></div>
-        <button class="lc-product-chip" type="button" data-lc-product="profile">${safe(persona)}</button>
+        <button class="lc-product-chip" type="button" ${accountTarget}>${safe(persona)}</button>
       </div>
       ${state.demo ? `<div class="lc-product-demo-banner"><strong>${safe((state.demoPersona || "preview").toUpperCase())}</strong><div class="lc-product-actions"><button class="lc-product-chip" type="button" data-lc-demo-switch>Switch</button><button class="lc-product-chip" type="button" data-lc-demo-reset>Reset</button><button class="lc-product-chip" type="button" data-lc-demo-exit>Opening</button></div></div>` : ""}
     `;
@@ -757,6 +758,30 @@
     return `<section class="lc-product-card"><div class="lc-product-section-head"><h2>Notifications</h2><span>${state.notifications.length ? `${unread} unread` : "Empty"}</span></div>${unread ? `<div class="lc-product-actions"><button class="lc-product-chip" type="button" data-lc-notifications-read>Mark all read</button></div>` : ""}${state.notifications.length ? state.notifications.map((n) => `<div class="lc-product-row ${n.read_at ? "" : "unread"}"><div class="lc-product-row-main"><b>${safe(notificationText(n))}</b><span>${safe(new Date(n.created_at).toLocaleString())}</span></div><button class="lc-product-chip" type="button" data-lc-notification="${safe(n.id)}">Open</button></div>`).join("") : `<div class="lc-product-empty">${safe(emptyText)}</div>`}</section>`;
   }
 
+  function activitySignalMeta(row) {
+    const sessionEntry = findSessionEntry(row.target_id);
+    const creator = state.creators.find((item) => item.profile.id === row.creator_id)
+      || sessionEntry?.entry
+      || state.creators.find((item) => item.profile.id === row.target_id);
+    const type = row.type || row.signal_type || "activity";
+    if (type === "creator_live") return { icon: "●", eyebrow: "LIVE NOW", creator };
+    if (type === "new_follower") return { icon: "+", eyebrow: "NEW FOLLOWER", creator };
+    if (type === "post_like") return { icon: "♥", eyebrow: "REACTION", creator };
+    if (["comment", "comment_reply"].includes(type)) return { icon: "◎", eyebrow: "CONVERSATION", creator };
+    return { icon: "◇", eyebrow: "UPDATE", creator };
+  }
+
+  function renderActivitySignals(emptyText) {
+    if (!state.notifications.length) {
+      return `<section class="lc-v4-activity-empty"><span aria-hidden="true">♡</span><h2>Your activity starts with a follow.</h2><p>${safe(emptyText)}</p><button class="lc-product-btn" type="button" data-lc-product="explore">EXPLORE CREATORS</button></section>`;
+    }
+    return `<section class="lc-v4-signal-list" aria-label="Recent activity">${state.notifications.map((row) => {
+      const meta = activitySignalMeta(row);
+      const visual = meta.creator ? `<img src="${safe(avatar(meta.creator.profile))}" alt="">` : `<span aria-hidden="true">${meta.icon}</span>`;
+      return `<button class="lc-v4-signal ${row.read_at ? "" : "unread"}" type="button" data-lc-notification="${safe(row.id)}"><span class="lc-v4-signal-avatar">${visual}</span><span class="lc-v4-signal-copy"><small>${safe(meta.eyebrow)}</small><b>${safe(notificationText(row))}</b><time datetime="${safe(row.created_at)}">${safe(new Date(row.created_at).toLocaleString())}</time></span><i aria-hidden="true">›</i></button>`;
+    }).join("")}</section>`;
+  }
+
   async function markNotificationsRead(ids) {
     const unread = state.notifications.filter((item) => !item.read_at && (!ids || ids.includes(item.id)));
     if (!unread.length) return;
@@ -846,7 +871,7 @@
 
   function renderSavedSchedule() {
     const saved = savedScheduleEntries();
-    return `<section class="lc-product-card"><div class="lc-product-section-head"><h2>My schedule</h2><span>${saved.length ? `${saved.length} saved` : "Return plan"}</span></div>${saved.length ? saved.map(({ entry, session }) => `<div class="lc-product-row"><img src="${safe(avatar(entry.profile))}" alt=""><div class="lc-product-row-main"><b>${safe(profileName(entry.profile))} · ${safe(session.game)}</b><span>${safe(sessionLine(session))} · ${safe(session.operator_name || "Operator to be confirmed")}</span></div><button class="lc-product-chip active" type="button" data-lc-open-creator="${safe(entry.profile.id)}">Open</button></div>`).join("") : `<div class="lc-product-empty">Save a Creator's upcoming session to build your return plan. LC currently provides in-app schedule context; push, email and SMS are not enabled.</div>`}</section>`;
+    return `<section class="lc-v4-saved-schedule"><div class="lc-v4-social-section-head"><div><span>NEXT LIVE</span><h2>My schedule</h2></div><b>${saved.length}</b></div>${saved.length ? `<div class="lc-v4-schedule-strip">${saved.map(({ entry, session }) => `<button class="lc-v4-schedule-card" type="button" data-lc-live="${safe(session.id)}"><img src="${safe(visualImage(entry.profile))}" alt=""><span class="lc-v4-feed-gradient"></span><span class="lc-v4-schedule-copy"><small>${safe(new Date(session.starts_at).toLocaleString())}</small><b>${safe(profileName(entry.profile))}</b><em>${safe(session.game)}</em></span></button>`).join("")}</div>` : `<div class="lc-v4-inline-empty"><p>Save an upcoming Creator session and it will stay here as your return plan. In this build, push, email and SMS are not enabled.</p><button class="lc-product-chip" type="button" data-lc-product="explore">FIND A SESSION</button></div>`}</section>`;
   }
 
   function socialFeedEntries() {
@@ -938,12 +963,14 @@
 
   function renderSocialActivity() {
     const unread = state.notifications.filter((item) => !item.read_at).length;
-    shell().innerHTML = `${top("Activity", unread ? `${unread} unread` : "You're caught up")}
+    const saved = savedScheduleEntries();
+    shell().innerHTML = `${top("Activity", unread ? `${unread} new signal${unread === 1 ? "" : "s"}` : "You're caught up")}
       <div class="lc-product-stack lc-v4-activity" data-lc-activity>
-        <section class="lc-v4-activity-head"><div><span class="lc-v3-kicker">YOUR RETURN LOOP</span><h1>Signals from people you follow</h1><p>Live alerts, schedule reminders and social activity stay together.</p></div>${unread ? `<button class="lc-product-chip" type="button" data-lc-notifications-read>Mark all read</button>` : ""}</section>
-        ${renderNotifications("No activity yet. Follow creators or save a session and LC will keep the relationship connected.")}
-        <p class="lc-product-note">In-app only. No email, SMS or push delivery is implied.</p>
+        <section class="lc-v4-activity-head"><div><span class="lc-v3-kicker">ACTIVITY</span><h1>People worth coming back for.</h1><p>Live signals, reactions and reminders from your social circle.</p></div><div class="lc-v4-activity-counters"><span><b>${unread}</b> new</span><span><b>${saved.length}</b> saved</span></div></section>
+        <div class="lc-v4-social-section-head"><div><span>NOW</span><h2>Recent activity</h2></div>${unread ? `<button class="lc-product-chip" type="button" data-lc-notifications-read>Mark all read</button>` : ""}</div>
+        ${renderActivitySignals("Follow creators or save a session and LC will keep the relationship connected.")}
         ${renderSavedSchedule()}
+        <p class="lc-v4-privacy-note"><b>Private by design.</b> In-app only. No email, SMS or push delivery is implied.</p>
       </div>${tabs("activity")}`;
   }
 
@@ -1188,15 +1215,24 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
 
   function renderAccount() {
     const persona = state.current?.persona || "none";
-    shell().innerHTML = `${top("Profile", "Your LC App experience")}
-      <div class="lc-product-stack lc-v3-account">
-        <section class="lc-v3-account-hero"><img src="${safe(avatar(state.profile))}" alt=""><div><span class="lc-v3-kicker">ACCOUNT</span><h1>${safe(profileName(state.profile))}</h1><p>${safe(state.profile.username ? "@" + state.profile.username : "LC App user")} · ${safe(persona)}</p></div></section>
-        <section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">EXPERIENCE</span><h2>Switch perspective</h2></div></div><p class="lc-v3-body-copy">Product personas change what you see. They never change your security role.</p><div class="lc-v3-persona-switch"><button class="lc-product-chip ${persona === "player" ? "active" : ""}" type="button" data-lc-persona="player">Player</button><button class="lc-product-chip ${persona === "creator" ? "active" : ""}" type="button" data-lc-persona="creator">Creator</button><button class="lc-product-chip ${persona === "industry" ? "active" : ""}" type="button" data-lc-persona="industry">Industry</button></div></section>
-        ${persona === "player" && state.player ? `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">DISCOVERY PREFERENCES</span><h2>Your feed signals</h2></div></div><div class="lc-v3-account-pref"><div><b>Games</b><span>${safe((state.player.favorite_games || []).join(" · ") || "Not set")}</span></div><div><b>Languages</b><span>${safe((state.player.preferred_languages || []).join(" · ") || "Not set")}</span></div></div></section>` : ""}
-        ${state.demo ? "" : `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">LIVE SIGNALS</span><h2>Creator return alerts</h2></div><span>${state.returnSignalsAvailable ? (state.liveSignalsEnabled ? "On" : "Muted") : "Backend pending"}</span></div><p class="lc-v3-body-copy">In-app signals only when a followed, eligible Creator becomes Live.</p><button class="lc-product-chip ${state.liveSignalsEnabled ? "active" : ""}" type="button" data-lc-live-signals ${state.returnSignalsAvailable ? "" : "disabled"}>${state.liveSignalsEnabled ? "MUTE LIVE SIGNALS" : "ENABLE LIVE SIGNALS"}</button></section>`}
-        ${state.demo ? "" : `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">SAFETY & PRIVACY</span><h2>Account controls</h2></div></div><div class="lc-v3-settings-list"><button type="button" data-lc-blocked-list><span><b>Blocked creators</b><small>${state.blockedIds.size} blocked</small></span><i>›</i></button><button type="button" data-auth-route="profile"><span><b>Profile, password & deletion</b><small>Secure account settings</small></span><i>›</i></button></div></section>`}
-        <section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">SECURITY</span><h2>Account boundary</h2></div><span>${safe(state.profile.role || "user")}</span></div><p class="lc-v3-body-copy">Security role is separate from Player, Creator and Industry product experiences.</p></section>
-        <section class="lc-v3-signout"><button class="lc-product-btn secondary" type="button" ${state.demo ? "data-lc-demo-exit" : "data-auth-route=\"logout\""}>${state.demo ? "BACK TO OPENING" : "SIGN OUT"}</button></section>
+    const isCreator = persona === "creator";
+    const ownPosts = isCreator ? state.posts.filter((post) => !post.deleted_at && post.status !== "deleted") : [];
+    const upcoming = isCreator ? state.sessions.filter((session) => session.status === "scheduled") : savedScheduleEntries();
+    const profileStatus = isCreator ? creatorPublication() : null;
+    shell().innerHTML = `${top("Profile", isCreator ? "Your public identity and controls" : "Your social corner")}
+      <div class="lc-product-stack lc-v4-social-profile">
+        <section class="lc-v4-profile-hero"><div class="lc-v4-profile-avatar"><img src="${safe(avatar(state.profile))}" alt=""><span>${isCreator && profileStatus?.publicReady ? "CREATOR" : "LC"}</span></div><div class="lc-v4-profile-identity"><span class="lc-v3-kicker">${isCreator ? "CREATOR PROFILE" : "PLAYER PROFILE"}</span><h1>${safe(profileName(state.profile))}</h1><p>${safe(state.profile.username ? "@" + state.profile.username : "LC App member")}${state.profile.bio ? ` · ${safe(state.profile.bio)}` : ""}</p></div>${isCreator ? `<button class="lc-product-btn" type="button" data-lc-product="create">OPEN STUDIO</button>` : `<button class="lc-product-chip" type="button" data-lc-product="explore">DISCOVER</button>`}</section>
+        <section class="lc-v4-profile-stats" aria-label="App-owned profile activity"><button type="button" data-lc-product="explore"><b>${state.follows.size}</b><span>Following</span></button><button type="button" data-lc-product="activity"><b>${upcoming.length}</b><span>${isCreator ? "Scheduled" : "Saved"}</span></button><button type="button" ${isCreator ? `data-lc-product="create"` : `data-lc-product="activity"`}><b>${isCreator ? ownPosts.length : state.notifications.length}</b><span>${isCreator ? "Posts" : "Signals"}</span></button></section>
+        ${isCreator ? `<section class="lc-v4-profile-public"><div class="lc-v4-social-section-head"><div><span>PUBLIC PROFILE</span><h2>${safe(state.creator?.headline || "Live Casino creator")}</h2></div><b>${safe(profileStatus?.publicReady ? "Live" : "Private")}</b></div><p>${safe(state.profile.bio || "Add a short bio from secure profile settings.")}</p><div class="lc-v4-profile-tags">${[...(state.creator?.games || []), ...(state.creator?.languages || [])].map((item) => `<span>${safe(item)}</span>`).join("")}</div>${ownPosts.length ? `<div class="lc-v4-profile-media-grid">${ownPosts.slice(0, 6).map((post, index) => `<button type="button" data-lc-product="create"><img src="${safe(visualImage(state.profile))}" alt=""><span>${safe(post.body)}</span><i>${String(index + 1).padStart(2, "0")}</i></button>`).join("")}</div>` : `<div class="lc-v4-inline-empty"><p>No published posts yet. Create your first social update in Studio.</p><button class="lc-product-chip" type="button" data-lc-product="create">CREATE A POST</button></div>`}</section>` : ""}
+        ${persona === "player" && state.player ? `<section class="lc-v4-profile-preferences"><div class="lc-v4-social-section-head"><div><span>YOUR FEED</span><h2>Discovery preferences</h2></div></div><div><article><small>GAMES</small><p>${safe((state.player.favorite_games || []).join(" · ") || "Not set")}</p></article><article><small>LANGUAGES</small><p>${safe((state.player.preferred_languages || []).join(" · ") || "Not set")}</p></article></div></section>` : ""}
+        <section class="lc-v4-profile-controls"><div class="lc-v4-social-section-head"><div><span>ACCOUNT</span><h2>Settings and safety</h2></div></div>
+          <div class="lc-v4-settings-list">
+            ${state.demo ? "" : `<button type="button" data-lc-live-signals ${state.returnSignalsAvailable ? "" : "disabled"}><span><b>Live creator signals</b><small>${state.returnSignalsAvailable ? (state.liveSignalsEnabled ? "On · in-app only" : "Muted") : "Not available"}</small></span><i>${state.liveSignalsEnabled ? "●" : "○"}</i></button><button type="button" data-lc-blocked-list><span><b>Blocked creators</b><small>${state.blockedIds.size} blocked</small></span><i>›</i></button><button type="button" data-auth-route="profile"><span><b>Privacy, password and deletion</b><small>Secure account settings</small></span><i>›</i></button>`}
+            <div class="lc-v4-account-boundary"><span><b>Account security role</b><small>Separate from the product experience</small></span><em>${safe(state.profile.role || "user")}</em></div>
+          </div>
+        </section>
+        <section class="lc-v4-profile-mode"><div><span class="lc-v3-kicker">EXPERIENCE</span><h2>Use LC as</h2><p>Switching product mode never changes permissions or account role.</p></div><div class="lc-v4-mode-switch"><button class="${persona === "player" ? "active" : ""}" type="button" data-lc-persona="player">Player</button><button class="${persona === "creator" ? "active" : ""}" type="button" data-lc-persona="creator">Creator</button><button class="${persona === "industry" ? "active" : ""}" type="button" data-lc-persona="industry">Business</button></div></section>
+        <section class="lc-v4-profile-signout"><button class="lc-product-chip" type="button" ${state.demo ? "data-lc-demo-exit" : "data-auth-route=\"logout\""}>${state.demo ? "BACK TO OPENING" : "SIGN OUT"}</button><p>LC never holds gameplay funds, wallet data, wagering or KYC/AML records.</p></section>
       </div>${tabs("profile")}`;
   }
 
