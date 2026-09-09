@@ -29,6 +29,7 @@
     search: "",
     discoveryFilter: "for_you",
     socialView: "home",
+    creatorStudioView: "overview",
     businessView: "overview",
     demo: false,
     demoPersona: null,
@@ -53,7 +54,7 @@
   const PRODUCT_EVENTS = new Set(["product_open", "creator_impression", "discovery_search", "creator_profile_open", "creator_follow", "live_session_open", "schedule_reminder", "handoff_intent", "handoff_return", "notification_response"]);
   const PILOT_EVENTS = [["creator_impression", "Creator impression"], ["creator_profile_open", "Profile open"], ["creator_follow", "Follow"], ["live_session_open", "Live open"], ["schedule_reminder", "Schedule reminder"], ["handoff_intent", "Handoff intent"], ["handoff_return", "Return visit"], ["notification_response", "Signal response"]];
   const PILOT_HYPOTHESES = [["creator_handoff", "Creator-led discovery produces operator handoff intent"], ["creator_return", "Following a Creator contributes to return activity"], ["live_signal_response", "Live signals prompt measurable player response"], ["creator_source_attribution", "Creator source remains attributable through handoff and return"]];
-  const demoStore = { follows: new Set(), creatorLiveAlerts: new Map(), reminders: new Set(), likes: new Set(), comments: [], posts: [], sessions: [], notifications: [], requests: new Set(), pilotBriefs: [] };
+  const demoStore = { follows: new Set(), creatorLiveAlerts: new Map(), reminders: new Set(), likes: new Set(), comments: [], posts: [], sessions: [], sessionOverrides: new Map(), notifications: [], requests: new Set(), pilotBriefs: [] };
   const demoProfiles = [
     { id: "demo-sofia", username: "sofia_live", display_name: "Sofia Laurent", avatar_url: "app_prototype_assets/dealers/v2_polish/sofia_avatar_public.jpg", bio: "Blackjack dealer building a followable Live Casino audience.", country: "Malta", languages: ["English", "French"] },
     { id: "demo-mia", username: "mia_tables", display_name: "Mia Novak", avatar_url: "app_prototype_assets/dealers/dealer_mia_avatar_v1.jpg", bio: "Roulette and baccarat sessions with a calm table style.", country: "Latvia", languages: ["English", "Italian"] },
@@ -140,6 +141,7 @@
     demoStore.comments = [];
     demoStore.posts = [];
     demoStore.sessions = [];
+    demoStore.sessionOverrides.clear();
     demoStore.notifications = [];
     demoStore.requests.clear();
     demoStore.pilotBriefs = [];
@@ -575,7 +577,7 @@
     state.creators = demoCreators.map((creator) => ({
       creator,
       profile: demoProfile(creator.user_id),
-      sessions: [...demoSessions, ...demoStore.sessions].filter((session) => session.creator_id === creator.user_id),
+      sessions: [...demoSessions, ...demoStore.sessions].map((session) => ({ ...session, ...(demoStore.sessionOverrides.get(session.id) || {}) })).filter((session) => session.creator_id === creator.user_id),
       posts: [...demoStore.posts, ...demoPosts].filter((post) => post.author_id === creator.user_id)
     }));
   }
@@ -588,7 +590,7 @@
     state.accessRequests = [...demoStore.requests].map((industry_subtype) => ({ industry_subtype, status: "submitted", created_at: new Date().toISOString() }));
     state.pilotBriefs = [...demoStore.pilotBriefs];
     state.notifications = demoStore.notifications;
-    state.sessions = [...demoSessions, ...demoStore.sessions].filter((session) => session.creator_id === state.profile?.id);
+    state.sessions = [...demoSessions, ...demoStore.sessions].map((session) => ({ ...session, ...(demoStore.sessionOverrides.get(session.id) || {}) })).filter((session) => session.creator_id === state.profile?.id);
     state.posts = [...demoStore.posts, ...demoPosts].filter((post) => post.author_id === state.profile?.id);
   }
 
@@ -610,6 +612,7 @@
     state.demoPersona = persona;
     state.discoveryFilter = "for_you";
     state.socialView = "home";
+    state.creatorStudioView = "overview";
     state.businessView = "overview";
     state.current = { id: `demo-${persona}`, persona: currentPersona, industry_subtype: industrySubtype, onboarding_status: "completed", is_current: true };
     state.profile = persona === "creator" ? demoProfile("demo-sofia") : { id: "demo-reviewer", username: "demo_reviewer", display_name: "Demo Reviewer", avatar_url: "app-icon-512.png", role: persona === "admin" ? "admin" : "user", account_status: "active", onboarding_completed: true };
@@ -954,23 +957,62 @@
       </div>${tabs("create")}`;
   }
 
+  function creatorStudioNavigation(active) {
+    const items = [["overview", "Studio"], ["post", "Post"], ["schedule", "Schedule"], ["live", "Live"], ["audience", "Audience"]];
+    return `<nav class="lc-v4-studio-nav" aria-label="Creator tools">${items.map(([id, label]) => `<button class="${active === id ? "active" : ""}" type="button" data-lc-creator-studio="${id}">${label}</button>`).join("")}</nav>`;
+  }
+
+  function creatorSessionCard(session, publication, mode = "schedule") {
+    const isScheduled = session.status === "scheduled";
+    const isLive = session.status === "live";
+    const canPublish = publication.publicReady && isScheduled;
+    return `<article class="lc-v4-studio-session ${isLive ? "is-live" : ""}">
+      <div class="lc-v4-studio-session-time"><span>${isLive ? "LIVE" : new Date(session.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}</span><b>${isLive ? "NOW" : new Date(session.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</b></div>
+      <div class="lc-v4-studio-session-copy"><span>${safe(session.game)} · ${safe(session.visibility || "private")}</span><h3>${safe(session.title || "Live session")}</h3><p>${safe(session.operator_name || "Operator context not set")}</p></div>
+      <div class="lc-v4-studio-session-actions">
+        ${canPublish ? `<button class="lc-product-chip" type="button" data-lc-session-visibility="${session.visibility === "public" ? "private" : "public"}" data-lc-session-id="${safe(session.id)}">${session.visibility === "public" ? "Make private" : "Publish"}</button>` : ""}
+        ${mode === "live" && session.visibility === "public" && isScheduled ? `<button class="lc-product-btn" type="button" data-lc-session-status="live" data-lc-session-id="${safe(session.id)}">GO LIVE</button>` : ""}
+        ${isLive ? `<button class="lc-product-btn secondary" type="button" data-lc-session-status="completed" data-lc-session-id="${safe(session.id)}">END LIVE</button>` : ""}
+        ${["scheduled", "live"].includes(session.status) ? `<button class="lc-product-chip" type="button" data-lc-session-status="cancelled" data-lc-session-id="${safe(session.id)}">Cancel</button>` : ""}
+      </div>
+    </article>`;
+  }
+
   function renderCreatorHome() {
     const c = state.creator;
     const publication = creatorPublication();
     const reviewCopy = creatorReviewCopy(publication.verification);
+    const allowedViews = new Set(["overview", "post", "schedule", "live", "audience"]);
+    const view = allowedViews.has(state.creatorStudioView) ? state.creatorStudioView : "overview";
+    state.creatorStudioView = view;
+    const upcoming = state.sessions.filter((item) => item.status === "scheduled").sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+    const liveNow = state.sessions.find((item) => item.status === "live");
     const publicAction = publication.approved
-      ? `<button class="lc-product-btn ${publication.published ? "secondary" : ""}" type="button" data-lc-creator-profile-status="${publication.published ? "draft" : "published"}">${publication.published ? "MAKE PROFILE PRIVATE" : "PUBLISH PROFILE"}</button>`
+      ? `<button class="lc-product-btn ${publication.published ? "secondary" : ""}" type="button" data-lc-creator-profile-status="${publication.published ? "draft" : "published"}">${publication.published ? "MAKE PRIVATE" : "PUBLISH PROFILE"}</button>`
       : "";
+    const views = {
+      overview: `<section class="lc-v4-studio-command"><div><span class="lc-v3-kicker">TODAY</span><h2>${liveNow ? "You are Live." : upcoming[0] ? "Your next return moment is ready." : "Give followers a reason to return."}</h2><p>${liveNow ? safe(liveNow.title) : upcoming[0] ? `${safe(upcoming[0].title)} · ${safe(sessionLine(upcoming[0]))}` : "Share a post or schedule your next Live table."}</p></div><button class="lc-product-btn" type="button" data-lc-creator-studio="${liveNow ? "live" : upcoming[0] ? "live" : "schedule"}">${liveNow ? "MANAGE LIVE" : upcoming[0] ? "OPEN LIVE CONTROL" : "SCHEDULE LIVE"}</button></section>
+        <section class="lc-v4-studio-quick"><button type="button" data-lc-creator-studio="post"><span>＋</span><b>Create post</b><small>Share an update</small></button><button type="button" data-lc-creator-studio="schedule"><span>◷</span><b>Schedule</b><small>Plan a return</small></button><button type="button" data-lc-creator-studio="live"><span>●</span><b>Live control</b><small>Start when eligible</small></button></section>
+        <section class="lc-product-card lc-v4-publication"><div><span class="lc-v3-kicker">PROFILE VISIBILITY</span><h2>${publication.published ? "Your Creator profile is visible" : safe(reviewCopy[0])}</h2><p>${safe(reviewCopy[1])}</p></div><div>${publicAction}<small>Verification remains server-controlled.</small></div></section>`,
+      post: `<section class="lc-v4-studio-title"><div><span>CREATE</span><h1>Share with followers</h1><p>Post table context, a short update or what to expect from your next Live session.</p></div></section>
+        ${publication.publicReady ? `<form class="lc-v4-post-composer" data-lc-form="post"><div class="lc-v4-post-author"><img src="${safe(avatar(state.profile))}" alt=""><span><b>${safe(profileName(state.profile))}</b><small>Public Creator post</small></span></div><label class="sr-only" for="creator-post-body">Post text</label><textarea id="creator-post-body" class="lc-product-textarea" name="body" maxlength="2000" placeholder="What should your followers know?"></textarea><div><span>Public content · moderation applies</span><button class="lc-product-btn" type="submit">SHARE</button></div></form>` : `<section class="lc-v4-studio-locked"><span>PRIVATE</span><h2>Content unlocks after verification and publication.</h2><p>Your drafts and profile remain private. Approval cannot be granted from this screen.</p></section>`}
+        <section class="lc-v4-post-library"><div class="lc-product-section-head"><h2>Your posts</h2><span>${state.posts.length} total</span></div>${state.posts.length ? state.posts.map((post) => `<article><time>${safe(new Date(post.created_at).toLocaleString())}</time><p>${safe(post.body)}</p><span>${safe(post.status || "active")}</span></article>`).join("") : `<div class="lc-product-empty">No posts yet.</div>`}</section>`,
+      schedule: `<section class="lc-v4-studio-title"><div><span>SCHEDULE</span><h1>Plan the next Live moment</h1><p>Followers can save an eligible public session and return for you at the right time.</p></div></section>
+        <form class="lc-v4-session-composer" data-lc-form="session"><label><span>Session title</span><input class="lc-product-input" name="title" maxlength="120" placeholder="Evening Blackjack" value="Live table session"></label><label><span>Game</span><select class="lc-product-select" name="game">${games.map((game) => `<option>${safe(game)}</option>`).join("")}</select></label><label><span>Date and time</span><input class="lc-product-input" name="starts_at" type="datetime-local" required></label><label><span>Operator or studio <small>optional · user claimed</small></span><input class="lc-product-input" name="operator_name" maxlength="120" placeholder="Not verified by LC"></label><button class="lc-product-btn" type="submit">${publication.publicReady ? "ADD TO SCHEDULE" : "SAVE PRIVATE SESSION"}</button><p>${publication.publicReady ? "Followers can save this session after it is public." : "This stays private until Creator verification and profile publication are complete."}</p></form>
+        <section class="lc-v4-session-list"><div class="lc-product-section-head"><h2>Upcoming</h2><span>${upcoming.length}</span></div>${upcoming.length ? upcoming.map((session) => creatorSessionCard(session, publication)).join("") : `<div class="lc-product-empty">Nothing scheduled yet.</div>`}</section>`,
+      live: `<section class="lc-v4-live-control ${liveNow ? "is-live" : ""}"><span>${liveNow ? "LIVE NOW" : "LIVE CONTROL"}</span><h1>${liveNow ? safe(liveNow.title) : "Start only when the session is ready."}</h1><p>${liveNow ? "Followers with eligible Live signals can return to your public session." : "A session must be scheduled, public and attached to an approved Creator profile before it can go Live."}</p>${liveNow ? creatorSessionCard(liveNow, publication, "live") : ""}</section>
+        ${!liveNow ? `<section class="lc-v4-session-list"><div class="lc-product-section-head"><h2>Ready to start</h2><span>${upcoming.filter((item) => item.visibility === "public").length}</span></div>${upcoming.length ? upcoming.map((session) => creatorSessionCard(session, publication, "live")).join("") : `<div class="lc-product-empty">Schedule a session first.</div>`}</section>` : ""}
+        <section class="lc-v4-studio-boundary"><b>LC controls the social signal, not the game.</b><span>Gameplay, wallet, KYC/AML, wagering, settlement and responsible-gaming operations remain with licensed operator/provider infrastructure.</span></section>`,
+      audience: `<section class="lc-v4-studio-title"><div><span>AUDIENCE</span><h1>Understand app-owned activity</h1><p>Only observed LC interactions appear here. Commercial impact remains To be validated.</p></div></section>
+        <section class="lc-v4-audience-summary"><article><b>${state.posts.length}</b><span>Published records</span></article><article><b>${upcoming.length}</b><span>Scheduled returns</span></article><article><b>${state.notifications.filter((item) => item.type === "new_follower").length}</b><span>Follower signals</span></article><article><b>To be validated</b><span>Operator value</span></article></section>
+        ${renderNotifications("No audience activity yet. New followers, reactions and comments will appear here.")}
+        <p class="lc-product-note">Counts are app-owned records, not GGR, CAC, retention or ROI claims.</p>`
+    };
     shell().innerHTML = `${top("Create", "Creator studio")}
-      <div class="lc-product-stack lc-v4-creator-studio">
-        <section class="lc-v4-studio-profile"><img src="${safe(visualImage(state.profile))}" alt=""><div><span class="lc-v3-kicker">CREATOR STUDIO</span><h1>${safe(profileName(state.profile))}</h1><p>${safe(c.headline || "Live Casino creator")}</p><div class="lc-v4-studio-badges"><span>${safe(publication.verification)}</span><span>${publication.published ? "Public profile" : "Private profile"}</span></div></div><button class="lc-product-chip" type="button" data-lc-product="profile">View profile</button></section>
-        <section class="lc-v4-studio-summary"><article><b>${state.posts.length}</b><span>Posts</span></article><article><b>${state.sessions.filter((item) => item.status === "scheduled").length}</b><span>Upcoming</span></article><article><b>${state.sessions.filter((item) => item.status === "live").length}</b><span>Live now</span></article><article><b>To be validated</b><span>Return impact</span></article></section>
-        <section class="lc-product-card"><div class="lc-product-section-head"><h2>Publication</h2><span>${safe(reviewCopy[0])}</span></div><p>${safe(reviewCopy[1])}</p><div class="lc-product-actions">${publicAction}</div><span class="lc-product-note">Verification is server-controlled. Publishing changes visibility only after approval; it never grants verification.</span></section>
-        ${publication.publicReady ? `<section class="lc-product-card"><h2>Create post</h2><p>Share with followers</p><form class="lc-product-form" data-lc-form="post"><textarea class="lc-product-textarea" name="body" maxlength="2000" placeholder="What should your followers know?"></textarea><button class="lc-product-btn" type="submit">SHARE POST</button></form></section>` : `<section class="lc-product-card"><div class="lc-product-section-head"><h2>Creator content</h2><span>Private until approved</span></div><p>Publishing becomes available after server-controlled verification and profile publication.</p><span class="lc-product-note">LC does not expose unverified Creator posts as public content.</span></section>`}
-        <section class="lc-product-card"><div class="lc-product-section-head"><h2>Schedule a Live session</h2><span>Build a return moment</span></div><form class="lc-product-form lc-v4-session-form" data-lc-form="session"><input class="lc-product-input" name="title" maxlength="120" placeholder="Session title" value="Live table session"><select class="lc-product-select" name="game">${games.map((g) => `<option>${safe(g)}</option>`).join("")}</select><input class="lc-product-input" name="operator_name" maxlength="120" placeholder="Operator or studio (user claimed / optional)"><input class="lc-product-input" name="starts_at" type="datetime-local" required><button class="lc-product-btn" type="submit">${publication.publicReady ? "ADD TO SCHEDULE" : "SAVE PRIVATE SESSION"}</button></form><span class="lc-product-note">${publication.publicReady ? "Eligible followers can save this session. Operator/provider context remains user claimed unless verified by partner integration." : "This session stays private until verification and publication are complete."}</span></section>
-        <section class="lc-product-card"><div class="lc-product-section-head"><h2>Sessions</h2><span>${publication.publicReady ? "Public control" : "Private workspace"}</span></div>${state.sessions.length ? state.sessions.map((s) => `<div class="lc-product-row"><div class="lc-product-row-main"><b>${safe(s.game)} · ${safe(s.title || "Live session")}</b><span>${safe(s.operator_name || "Operator to be confirmed")} · ${safe(sessionLine(s))} · ${safe(s.visibility || "private")}</span><div class="lc-product-actions">${publication.publicReady && s.status !== "cancelled" && s.status !== "completed" ? `<button class="lc-product-chip" type="button" data-lc-session-visibility="${s.visibility === "public" ? "private" : "public"}" data-lc-session-id="${safe(s.id)}">${s.visibility === "public" ? "Make private" : "Publish"}</button>` : ""}${s.visibility === "public" && s.status === "scheduled" ? `<button class="lc-product-chip" type="button" data-lc-session-status="live" data-lc-session-id="${safe(s.id)}">Go live</button>` : ""}${s.status === "live" ? `<button class="lc-product-chip" type="button" data-lc-session-status="completed" data-lc-session-id="${safe(s.id)}">End session</button>` : ""}${["scheduled", "live"].includes(s.status) ? `<button class="lc-product-chip" type="button" data-lc-session-status="cancelled" data-lc-session-id="${safe(s.id)}">Cancel</button>` : ""}</div></div></div>`).join("") : `<div class="lc-product-empty">No sessions yet. Save your next Live table; it stays private until you are ready and approved to publish.</div>`}</section>
-        <section class="lc-product-card"><h2>Posts</h2>${state.posts.length ? state.posts.map((p) => `<div class="lc-product-row"><div class="lc-product-row-main"><b>${new Date(p.created_at).toLocaleString()}</b><span>${safe(p.body)}</span></div></div>`).join("") : `<div class="lc-product-empty">No posts yet. Share a short table update for followers.</div>`}</section>
-        ${renderNotifications("No audience notifications yet. Followers, reactions and comments will appear here.")}
+      <div class="lc-product-stack lc-v4-creator-studio" data-lc-creator-studio-view="${safe(view)}">
+        <section class="lc-v4-studio-profile"><img src="${safe(visualImage(state.profile))}" alt=""><div><span class="lc-v3-kicker">CREATOR MODE</span><h1>${safe(profileName(state.profile))}</h1><p>${safe(c.headline || "Live Casino creator")}</p><div class="lc-v4-studio-badges"><span>${safe(publication.verification)}</span><span>${publication.published ? "Public profile" : "Private profile"}</span></div></div><button class="lc-product-chip" type="button" data-lc-open-creator="${safe(state.profile.id)}">View public profile</button></section>
+        ${creatorStudioNavigation(view)}
+        ${views[view]}
       </div>${tabs("create")}`;
     const dt = q('[name="starts_at"]');
     if (dt) {
@@ -1394,7 +1436,11 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
 
   async function setCreatorProfileStatus(profileStatus) {
     if (!state.creator || !["draft", "published"].includes(profileStatus)) throw new Error("validation");
-    if (profileStatus === "published" && state.creator.verification_status !== "verified") throw new Error("not_verified");
+    if (!state.demo && profileStatus === "published" && state.creator.verification_status !== "verified") throw new Error("not_verified");
+    if (state.demo) {
+      state.creator = { ...state.creator, profile_status: profileStatus };
+      return;
+    }
     const { error } = await state.client.from("creator_profiles").update({ profile_status: profileStatus }).eq("user_id", state.profile.id);
     if (error) throw error;
     if (profileStatus === "draft") {
@@ -1406,7 +1452,7 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
 
   async function updateCreatorSession(id, changes) {
     const session = state.sessions.find((row) => row.id === id);
-    if (!session || session.provenance !== "user_generated") throw new Error("validation");
+    if (!session || (!state.demo && session.provenance !== "user_generated")) throw new Error("validation");
     const allowedTransitions = {
       scheduled: new Set(["scheduled", "live", "cancelled"]),
       live: new Set(["live", "completed", "cancelled"]),
@@ -1420,6 +1466,11 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     const nextChanges = ["completed", "cancelled"].includes(changes.status)
       ? { ...changes, visibility: "private" }
       : changes;
+    if (state.demo) {
+      demoStore.sessionOverrides.set(id, { ...(demoStore.sessionOverrides.get(id) || {}), ...nextChanges });
+      refreshDemoData();
+      return;
+    }
     const { error } = await state.client.from("creator_sessions").update(nextChanges).eq("id", id).eq("creator_id", state.profile.id);
     if (error) throw error;
     await loadOwnCreatorData();
@@ -1653,8 +1704,18 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     const liveSignals = target.closest("[data-lc-live-signals]");
     const discoveryFilter = target.closest("[data-lc-discovery-filter]");
     const homeFilter = target.closest("[data-lc-home-filter]");
+    const creatorStudio = target.closest("[data-lc-creator-studio]");
     const businessView = target.closest("[data-lc-business-view]");
     try {
+      if (creatorStudio) {
+        event.preventDefault();
+        const value = creatorStudio.dataset.lcCreatorStudio;
+        if (!["overview", "post", "schedule", "live", "audience"].includes(value)) return;
+        state.creatorStudioView = value;
+        state.socialView = "create";
+        renderCreatorHome();
+        return;
+      }
       if (homeFilter) {
         event.preventDefault();
         const value = homeFilter.dataset.lcHomeFilter;
@@ -1885,6 +1946,7 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     state.profile = profile;
     state.discoveryFilter = "for_you";
     state.socialView = "home";
+    state.creatorStudioView = "overview";
     state.businessView = "overview";
     state.ready = true;
     renderLoading();
@@ -1902,6 +1964,7 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     state.client = null;
     state.discoveryFilter = "for_you";
     state.socialView = "home";
+    state.creatorStudioView = "overview";
     state.businessView = "overview";
     state.profile = null;
     state.demo = false;
