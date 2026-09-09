@@ -207,6 +207,17 @@
     tabs.setAttribute("aria-label", "Social app navigation");
   }
 
+  function syncDemoSwitch(root) {
+    root.querySelectorAll("[data-lc-demo-switch]").forEach((button) => {
+      button.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (window.location.hash !== "#/product") window.location.hash = "#/product";
+        else window.LCAppProduct?.mountDemoEntry?.();
+      };
+    });
+  }
+
   function ensureLoadingBar() {
     if (document.getElementById(LOAD_ID)) return;
     const bar = document.createElement("div");
@@ -275,6 +286,7 @@
     syncRouteState(root);
     syncRail();
     syncSocialTabs(root);
+    syncDemoSwitch(root);
     improveSemantics(root);
     syncBusyState(root);
     syncScrollState();
