@@ -1651,7 +1651,21 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     const blockedList = target.closest("[data-lc-blocked-list]");
     const unblock = target.closest("[data-lc-unblock]");
     const liveSignals = target.closest("[data-lc-live-signals]");
-    const discoveryFilter = target.closest("[data-lc-discovery-filter]");\n    const homeFilter = target.closest("[data-lc-home-filter]");\n    const businessView = target.closest("[data-lc-business-view]");\n    try {\n      if (homeFilter) {\n        event.preventDefault();\n        const value = homeFilter.dataset.lcHomeFilter;\n        if (!["for_you", "following"].includes(value)) return;\n        state.discoveryFilter = value;\n        state.socialView = "home";\n        void trackProductEvent("discovery_search", { metadata: { interaction: "home_filter", filter: value, result_count: suggestedCreators().length } });\n        renderPlayerHome();\n        return;\n      }\n      if (businessView) {
+    const discoveryFilter = target.closest("[data-lc-discovery-filter]");
+    const homeFilter = target.closest("[data-lc-home-filter]");
+    const businessView = target.closest("[data-lc-business-view]");
+    try {
+      if (homeFilter) {
+        event.preventDefault();
+        const value = homeFilter.dataset.lcHomeFilter;
+        if (!["for_you", "following"].includes(value)) return;
+        state.discoveryFilter = value;
+        state.socialView = "home";
+        void trackProductEvent("discovery_search", { metadata: { interaction: "home_filter", filter: value, result_count: suggestedCreators().length } });
+        renderPlayerHome();
+        return;
+      }
+      if (businessView) {
         event.preventDefault();
         state.businessView = businessView.dataset.lcBusinessView;
         renderIndustryHome(state.businessView);
