@@ -908,7 +908,7 @@
           <button class="lc-v4-live-orb lc-v4-explore-orb" type="button" data-lc-product="explore"><span>+</span><small>Explore</small></button>
           ${liveCreators.slice(0, 8).map((item) => `<button class="lc-v4-live-orb" type="button" data-lc-live="${safe(item.sessions[0].id)}"><span><img src="${safe(avatar(item.profile))}" alt=""><i>LIVE</i></span><small>${safe(profileName(item.profile).split(" ")[0])}</small></button>`).join("")}
         </section>
-        <div class="lc-v4-home-switch"><button class="active" type="button">For you</button><button type="button" data-lc-discovery-filter="following">Following</button></div>
+        <div class="lc-v4-home-switch"><button class="${state.discoveryFilter === "for_you" ? "active" : ""}" type="button" data-lc-home-filter="for_you">For you</button><button class="${state.discoveryFilter === "following" ? "active" : ""}" type="button" data-lc-home-filter="following">Following</button></div>
         <section class="lc-v4-social-feed" aria-label="Creator feed">
           ${feed.length ? feed.map(renderSocialPost).join("") : `<div class="lc-v4-feed-empty"><span>YOUR FEED</span><h1>Find people worth returning for.</h1><p>Explore verified, public Creator profiles and follow the people you want to see Live.</p><button class="lc-product-btn" type="button" data-lc-product="explore">EXPLORE CREATORS</button></div>`}
         </section>
@@ -1651,10 +1651,7 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     const blockedList = target.closest("[data-lc-blocked-list]");
     const unblock = target.closest("[data-lc-unblock]");
     const liveSignals = target.closest("[data-lc-live-signals]");
-    const discoveryFilter = target.closest("[data-lc-discovery-filter]");
-    const businessView = target.closest("[data-lc-business-view]");
-    try {
-      if (businessView) {
+    const discoveryFilter = target.closest("[data-lc-discovery-filter]");\n    const homeFilter = target.closest("[data-lc-home-filter]");\n    const businessView = target.closest("[data-lc-business-view]");\n    try {\n      if (homeFilter) {\n        event.preventDefault();\n        const value = homeFilter.dataset.lcHomeFilter;\n        if (!["for_you", "following"].includes(value)) return;\n        state.discoveryFilter = value;\n        state.socialView = "home";\n        void trackProductEvent("discovery_search", { metadata: { interaction: "home_filter", filter: value, result_count: suggestedCreators().length } });\n        renderPlayerHome();\n        return;\n      }\n      if (businessView) {
         event.preventDefault();
         state.businessView = businessView.dataset.lcBusinessView;
         renderIndustryHome(state.businessView);
