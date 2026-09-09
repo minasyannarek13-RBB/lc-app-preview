@@ -763,7 +763,7 @@
     const creator = state.creators.find((item) => item.profile.id === row.creator_id)
       || sessionEntry?.entry
       || state.creators.find((item) => item.profile.id === row.target_id);
-    const type = row.type || row.signal_type || "activity";
+    const type = row.type || row.signal_type || (sessionEntry?.session.status === "live" ? "creator_live" : "activity");
     if (type === "creator_live") return { icon: "●", eyebrow: "LIVE NOW", creator };
     if (type === "new_follower") return { icon: "+", eyebrow: "NEW FOLLOWER", creator };
     if (type === "post_like") return { icon: "♥", eyebrow: "REACTION", creator };
