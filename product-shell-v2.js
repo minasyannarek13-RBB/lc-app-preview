@@ -2,14 +2,28 @@
   "use strict";
 
   const CSS_ID = "lcProductV2Css";
+  const V4_CSS_ID = "lcProductV4Css";
   const RAIL_ID = "lcProductV2Rail";
   const LOAD_ID = "lcProductV2Loading";
   const PRODUCT_SELECTOR = "#lcProductShell";
-  const NAV_ITEMS = [
-    ["home", "⌂", "Discover"],
-    ["discover", "◎", "Creators"],
-    ["creator", "+", "Create"],
-    ["account", "◉", "Profile"]
+
+  const SOCIAL_NAV = [
+    ["home", "⌂", "Home"],
+    ["explore", "◎", "Explore"],
+    ["create", "+", "Create"],
+    ["activity", "♡", "Activity"],
+    ["profile", "◉", "Profile"]
+  ];
+
+  const BUSINESS_NAV = [
+    ["overview", "▦", "Overview"],
+    ["creators", "◎", "Creators"],
+    ["campaigns", "◈", "Campaigns"],
+    ["live", "●", "Live"],
+    ["performance", "↗", "Performance"],
+    ["integrations", "◇", "Integrations"],
+    ["safety", "◉", "Safety"],
+    ["settings", "⚙", "Settings"]
   ];
 
   function ensureCss() {
@@ -20,7 +34,16 @@
       link.rel = "stylesheet";
       document.head.appendChild(link);
     }
-    if (!/product-shell-v2\.css\?v=2$/.test(link.href)) link.href = "product-shell-v2.css?v=2";
+    if (!/product-shell-v2\.css\?v=4$/.test(link.href)) link.href = "product-shell-v2.css?v=4";
+
+    let v4 = document.getElementById(V4_CSS_ID);
+    if (!v4) {
+      v4 = document.createElement("link");
+      v4.id = V4_CSS_ID;
+      v4.rel = "stylesheet";
+      document.head.appendChild(v4);
+    }
+    if (!/product-shell-v4\.css\?v=2$/.test(v4.href)) v4.href = "product-shell-v4.css?v=2";
   }
 
   const productRoot = () => document.querySelector(PRODUCT_SELECTOR);
@@ -32,75 +55,133 @@
   }
 
   function currentPersonaLabel() {
-    const chip = productRoot()?.querySelector(".lc-product-top [data-lc-product='account']");
+    const root = productRoot();
+    const explicit = String(root?.dataset?.lcPersona || "").trim().toLowerCase();
+    if (["player", "creator", "operator", "provider", "admin", "industry"].includes(explicit)) {
+      return explicit === "industry" ? "Operator" : explicit.charAt(0).toUpperCase() + explicit.slice(1);
+    }
+    const chip = root?.querySelector(".lc-product-top [data-lc-product='profile'],.lc-product-top [data-lc-product='account']");
     const raw = String(chip?.textContent || "").trim().toLowerCase();
-    if (raw === "industry") return "Industry";
+    if (["industry", "operator"].includes(raw)) return "Operator";
+    if (raw === "provider") return "Provider";
+    if (raw === "admin") return "Admin";
     if (raw === "creator") return "Creator";
     if (raw === "player") return "Player";
-    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "Workspace";
+    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "Player";
+  }
+
+  function productFamily() {
+    const persona = currentPersonaLabel().toLowerCase();
+    return ["operator", "provider", "admin", "industry"].includes(persona) ? "business" : "social";
   }
 
   function activeNav() {
+    const root = productRoot();
+    if (productFamily() === "business" && root?.dataset?.lcBusinessView) return root.dataset.lcBusinessView;
+    if (productFamily() === "social" && root?.dataset?.lcSocialView) return root.dataset.lcSocialView;
     const route = currentRoute();
-    if (["creator", "live", "handoff"].includes(route[0])) return "discover";
     const title = productRoot()?.querySelector(".lc-product-brand strong")?.textContent?.toLowerCase() || "";
     if (/account|profile|settings|safety|privacy/.test(title)) return "account";
+    if (/notification|activity|signal/.test(title)) return "activity";
+    if (["creator", "live", "handoff"].includes(route[0]) && productFamily() === "social") return "discover";
     if (/creator home|create|session|content/.test(title) && currentPersonaLabel() === "Creator") return "creator";
-    if (/discover|creator/.test(title)) return "discover";
+    if (/discover|explore|creator/.test(title)) return "discover";
     return "home";
   }
 
   function syncRouteState(root) {
     const route = currentRoute();
+    const persona = currentPersonaLabel().toLowerCase();
+    const family = productFamily();
     const routeKey = route.length ? route.join("-") : "home";
     root.dataset.lcRoute = routeKey;
-    root.dataset.lcPersona = currentPersonaLabel().toLowerCase();
+    root.dataset.lcPersona = persona;
+    root.dataset.lcFamily = family;
     document.documentElement.dataset.lcRoute = routeKey;
+    document.documentElement.dataset.lcPersona = persona;
+    document.documentElement.dataset.lcFamily = family;
+    document.documentElement.classList.toggle("lc-v4-social", family === "social");
+    document.documentElement.classList.toggle("lc-v4-business", family === "business");
   }
 
-  function ensureRail() {
+  function buildNavButton([id, icon, label], family = "social") {
+    const button = document.createElement("button");
+    button.type = "button";
+    if (family === "business") button.dataset.lcBusinessView = id;
+    else button.dataset.lcProduct = id;
+    button.innerHTML = `<span class="lc-v2-rail-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
+    return button;
+  }
+
+  function syncRail() {
     const root = productRoot();
     if (!root || !isProductRoute()) return;
-    root.dataset.lcV2Layout = "workspace";
+    const family = productFamily();
+    root.dataset.lcV2Layout = family === "business" ? "workspace" : "social";
+
     let rail = document.getElementById(RAIL_ID);
+    if (family === "social") {
+      rail?.remove();
+      return;
+    }
+
     if (!rail) {
       rail = document.createElement("aside");
       rail.id = RAIL_ID;
-      rail.className = "lc-v2-rail";
-      rail.setAttribute("aria-label", "LC App workspace navigation");
+      rail.className = "lc-v2-rail lc-v4-business-rail";
+      rail.setAttribute("aria-label", "LC App business navigation");
       rail.innerHTML = `
         <div class="lc-v2-rail-brand">
           <span class="lc-v2-mark" aria-hidden="true">LC</span>
-          <div><strong>LC App</strong><span>Live Casino through people</span></div>
+          <div><strong>LC Business</strong><span>Operator & provider back office</span></div>
         </div>
-        <nav class="lc-v2-rail-nav" aria-label="Primary workspace"></nav>
+        <nav class="lc-v2-rail-nav" aria-label="Business workspace"></nav>
         <div class="lc-v2-rail-foot">
           <div class="lc-v2-network" data-lc-v2-network>Online</div>
-          <div class="lc-v2-boundary">Discovery, creator identity and return live in LC. Gameplay, funds, KYC/AML and settlement stay with licensed operator/provider infrastructure.</div>
+          <div class="lc-v2-boundary">LC manages discovery, creator relationships, configuration and observed attribution. Gameplay, funds, KYC/AML and settlement stay with licensed operator/provider infrastructure.</div>
         </div>`;
       root.prepend(rail);
     }
+
     const nav = rail.querySelector(".lc-v2-rail-nav");
-    if (nav && !nav.children.length) {
-      NAV_ITEMS.forEach(([id, icon, label]) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.dataset.lcProduct = id;
-        button.innerHTML = `<span class="lc-v2-rail-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
-        nav.appendChild(button);
+    if (nav) {
+      nav.replaceChildren(...BUSINESS_NAV.map((item) => buildNavButton(item, "business")));
+      nav.querySelectorAll("[data-lc-business-view]").forEach((button) => {
+        const active = button.dataset.lcBusinessView === activeNav();
+        button.classList.toggle("active", active);
+        if (active) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
       });
     }
-    rail.querySelectorAll("[data-lc-product]").forEach((button) => {
-      const active = button.dataset.lcProduct === activeNav();
-      button.classList.toggle("active", active);
-      if (active) button.setAttribute("aria-current", "page");
-      else button.removeAttribute("aria-current");
-    });
+
     const network = rail.querySelector("[data-lc-v2-network]");
     if (network) {
       network.textContent = navigator.onLine ? `${currentPersonaLabel()} · Online` : `${currentPersonaLabel()} · Offline`;
       network.classList.toggle("offline", !navigator.onLine);
     }
+  }
+
+  function syncSocialTabs(root) {
+    if (productFamily() !== "social") return;
+    const tabs = root.querySelector(".lc-product-tabs");
+    if (!tabs) return;
+    const existing = new Map(Array.from(tabs.querySelectorAll("button[data-lc-product]"), button => [button.dataset.lcProduct, button]));
+    const active = activeNav();
+    const fragment = document.createDocumentFragment();
+
+    SOCIAL_NAV.forEach(([id, icon, label]) => {
+      let button;
+      button = existing.get(id) || document.createElement("button");
+      button.type = "button";
+      button.dataset.lcProduct = id;
+      button.innerHTML = `<span class="lc-v4-social-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
+      button.classList.toggle("active", active === id);
+      if (active === id) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+      fragment.appendChild(button);
+    });
+    tabs.replaceChildren(fragment);
+    tabs.setAttribute("aria-label", "Social app navigation");
   }
 
   function ensureLoadingBar() {
@@ -112,29 +193,15 @@
     document.body.appendChild(bar);
   }
 
-  function normalizeNavigationCopy(root) {
-    root.querySelectorAll(".lc-product-tabs button").forEach((button) => {
-      const value = button.dataset.lcProduct;
-      if (value === "home" && /industry|creator/i.test(button.textContent || "")) return;
-      if (value === "home") button.textContent = "Discover";
-      if (value === "discover") button.textContent = "Creators";
-      if (value === "creator") button.textContent = "Create";
-      if (value === "account") button.textContent = "Profile";
-      const active = button.classList.contains("active");
-      if (active) button.setAttribute("aria-current", "page");
-      else button.removeAttribute("aria-current");
-    });
-  }
-
   function improveSemantics(root) {
     root.setAttribute("role", "main");
-    root.setAttribute("aria-label", "LC App product workspace");
+    root.setAttribute("aria-label", productFamily() === "business" ? "LC App business back office" : "LC App social experience");
 
     root.querySelectorAll("img").forEach((img) => {
       if (!img.hasAttribute("loading")) img.loading = "lazy";
       if (!img.hasAttribute("decoding")) img.decoding = "async";
       if (!img.getAttribute("alt")) {
-        const card = img.closest(".lc-product-row,.lc-product-cinema,.lc-product-media-tile");
+        const card = img.closest(".lc-product-row,.lc-product-cinema,.lc-product-media-tile,.lc-v3-live-card,.lc-v3-creator-row");
         const name = card?.querySelector("h1,h2,h3,b,strong")?.textContent?.trim();
         img.alt = name ? `${name} visual` : "LC App creator visual";
       }
@@ -146,7 +213,7 @@
       else button.removeAttribute("aria-disabled");
     });
 
-    const labelledFieldIds = new Set(Array.from(root.querySelectorAll("label[for]"), (label) => label.htmlFor).filter(Boolean));
+    const labelledFieldIds = new Set(Array.from(root.querySelectorAll("label[for]"), label => label.htmlFor).filter(Boolean));
     root.querySelectorAll("input,select,textarea").forEach((field) => {
       if (!field.getAttribute("autocomplete") && field.tagName === "INPUT") field.setAttribute("autocomplete", "off");
       if (field.getAttribute("aria-label") || (field.id && labelledFieldIds.has(field.id))) return;
@@ -183,8 +250,8 @@
     const root = productRoot();
     if (!root || !isProductRoute()) return;
     syncRouteState(root);
-    ensureRail();
-    normalizeNavigationCopy(root);
+    syncRail();
+    syncSocialTabs(root);
     improveSemantics(root);
     syncBusyState(root);
     syncScrollState();
