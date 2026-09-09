@@ -1,4 +1,4 @@
-const CACHE_NAME = "lc-app-investor-demo-v107";
+const CACHE_NAME = "lc-app-investor-demo-v108";
 
 const FILES_TO_CACHE = [
   "./",
@@ -7,6 +7,7 @@ const FILES_TO_CACHE = [
   "./social.js",
   "./app-product.js",
   "./product-shell-v4.css",
+  "./social-feed-v4.css",
   "./product-shell-v2.css",
   "./product-shell-v2.js",
   "./?app=1",

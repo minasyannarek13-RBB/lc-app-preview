@@ -3,6 +3,7 @@
 
   const CSS_ID = "lcProductV2Css";
   const V4_CSS_ID = "lcProductV4Css";
+  const SOCIAL_FEED_CSS_ID = "lcSocialFeedV4Css";
   const RAIL_ID = "lcProductV2Rail";
   const LOAD_ID = "lcProductV2Loading";
   const PRODUCT_SELECTOR = "#lcProductShell";
@@ -43,7 +44,16 @@
       v4.rel = "stylesheet";
       document.head.appendChild(v4);
     }
-    if (!/product-shell-v4\.css\?v=2$/.test(v4.href)) v4.href = "product-shell-v4.css?v=2";
+    if (!/product-shell-v4\.css\?v=3$/.test(v4.href)) v4.href = "product-shell-v4.css?v=3";
+
+    let socialFeed = document.getElementById(SOCIAL_FEED_CSS_ID);
+    if (!socialFeed) {
+      socialFeed = document.createElement("link");
+      socialFeed.id = SOCIAL_FEED_CSS_ID;
+      socialFeed.rel = "stylesheet";
+      document.head.appendChild(socialFeed);
+    }
+    if (!/social-feed-v4\.css\?v=1$/.test(socialFeed.href)) socialFeed.href = "social-feed-v4.css?v=1";
   }
 
   const productRoot = () => document.querySelector(PRODUCT_SELECTOR);
