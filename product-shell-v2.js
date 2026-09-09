@@ -56,9 +56,9 @@
 
   function currentPersonaLabel() {
     const root = productRoot();
-    const explicit = String(root?.dataset?.lcPersona || "").trim().toLowerCase();
-    if (["player", "creator", "operator", "provider", "admin", "industry"].includes(explicit)) {
-      return explicit === "industry" ? "Operator" : explicit.charAt(0).toUpperCase() + explicit.slice(1);
+    const routePersona = currentRoute()[0] === "demo" ? currentRoute()[1] : "";
+    if (["player", "creator", "operator", "provider", "admin"].includes(routePersona)) {
+      return routePersona.charAt(0).toUpperCase() + routePersona.slice(1);
     }
     const chip = root?.querySelector(".lc-product-top [data-lc-product='profile'],.lc-product-top [data-lc-product='account']");
     const raw = String(chip?.textContent || "").trim().toLowerCase();
@@ -67,7 +67,12 @@
     if (raw === "admin") return "Admin";
     if (raw === "creator") return "Creator";
     if (raw === "player") return "Player";
-    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : "Player";
+    if (raw) return raw.charAt(0).toUpperCase() + raw.slice(1);
+    const explicit = String(root?.dataset?.lcPersona || "").trim().toLowerCase();
+    if (["player", "creator", "operator", "provider", "admin", "industry"].includes(explicit)) {
+      return explicit === "industry" ? "Operator" : explicit.charAt(0).toUpperCase() + explicit.slice(1);
+    }
+    return "Player";
   }
 
   function productFamily() {
