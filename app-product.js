@@ -300,6 +300,11 @@
   function setBusy(button, busy = true) {
     state.busy = busy;
     if (button) button.disabled = busy;
+    const root = q("#lcProductShell");
+    if (root) {
+      if (busy) root.setAttribute("aria-busy", "true");
+      else root.removeAttribute("aria-busy");
+    }
   }
 
   function values(form, name) {
@@ -524,7 +529,9 @@
   const visualTile = (image, label, title, body, large = false) => `<article class="lc-product-media-tile ${large ? "large" : ""}"><img src="${safe(image || visualMedia.fallback)}" alt=""><div class="lc-product-media-copy"><span class="lc-product-label">${safe(label)}</span><h3>${safe(title)}</h3><p>${safe(body)}</p></div></article>`;
 
   function renderLoading() {
-    shell().innerHTML = `${top()}<div class="lc-product-card lc-product-empty">Loading product experience...</div>`;
+    const root = shell();
+    root.setAttribute("aria-busy", "true");
+    root.innerHTML = `${top()}<section class="lc-product-card lc-product-empty lc-product-loading" role="status" aria-live="polite"><span class="lc-product-spinner" aria-hidden="true"></span><h2>Loading your LC experience</h2><p>Restoring your profile, social signals and saved context.</p></section>`;
     syncConnectivity();
   }
 
@@ -533,22 +540,40 @@
     if (!root) return;
     const existing = q("#lcProductConnectivity", root);
     if (navigator.onLine) {
-      existing?.remove();
+      if (existing && !existing.classList.contains("is-online")) {
+        existing.classList.add("is-online");
+        existing.textContent = "Back online. Refreshing your LC context.";
+        window.setTimeout(() => existing.isConnected && existing.remove(), 2200);
+      }
       return;
     }
-    if (existing) return;
+    if (existing) {
+      existing.classList.remove("is-online");
+      existing.textContent = "You are offline. Saved screens remain available; account changes need a connection.";
+      return;
+    }
     const banner = document.createElement("div");
     banner.id = "lcProductConnectivity";
     banner.className = "lc-product-connectivity";
     banner.setAttribute("role", "status");
-    banner.textContent = "You are offline. Your account data will reconnect automatically.";
+    banner.setAttribute("aria-live", "polite");
+    banner.textContent = "You are offline. Saved screens remain available; account changes need a connection.";
     root.prepend(banner);
   }
 
   function renderLoadError(error) {
     state.loadError = error || new Error("load");
-    shell().innerHTML = `${top()}<section class="lc-product-card lc-product-empty"><h2>Product experience unavailable</h2><p>${safe(err(error))}</p><div class="lc-product-actions"><button class="lc-product-btn" type="button" data-lc-retry>Retry</button></div><span class="lc-product-note">Your account data has not been changed.</span></section>`;
+    const root = shell();
+    root.removeAttribute("aria-busy");
+    root.innerHTML = `${top()}<section class="lc-product-card lc-product-empty lc-product-load-error" role="alert" aria-live="assertive"><h2>We could not load LC App</h2><p id="lcProductLoadError">${safe(err(error))}</p><div class="lc-product-actions"><button class="lc-product-btn" type="button" data-lc-retry aria-describedby="lcProductLoadError">TRY AGAIN</button></div><span class="lc-product-note">Your account data has not been changed.</span></section>`;
     syncConnectivity();
+  }
+
+  function renderAccountDenied() {
+    const status = String(state.profile?.account_status || "unavailable");
+    const root = shell();
+    root.removeAttribute("aria-busy");
+    root.innerHTML = `${top("Account unavailable", "Protected account state")}<section class="lc-product-card lc-product-empty lc-product-account-denied" role="alert" aria-live="assertive"><span class="lc-product-label">ACCESS DENIED</span><h1>This LC account cannot open the product.</h1><p>Account status is <b>${safe(status)}</b>. Product access remains fail-closed and cannot be changed from this device.</p><div class="lc-product-actions"><button class="lc-product-btn secondary" type="button" data-auth-route="logout">SIGN OUT</button></div><span class="lc-product-note">Contact the authorized account administrator if you believe this state is incorrect.</span></section>`;
   }
 
   async function retryLoad(button = null, silent = false) {
@@ -560,6 +585,7 @@
       await loadState();
       state.loadError = null;
       renderProductTarget(productParts());
+      q("#lcProductShell")?.removeAttribute("aria-busy");
       syncConnectivity();
       if (!silent) toast("Product reconnected");
     } catch (error) {
@@ -947,18 +973,37 @@
 
   function renderSocialExplore() {
     const creators = suggestedCreators();
+    const liveCreators = creators.filter((item) => item.sessions[0]?.status === "live");
+    const upcomingCreators = creators.filter((item) => item.sessions[0]?.status === "scheduled");
+    const contentEntries = creators.flatMap((item) => item.posts.slice(0, 2).map((post) => ({ item, post }))).slice(0, 8);
     const filters = { for_you: "For you", live: "Live", following: "Following", upcoming: "Soon" };
+    const resultContext = state.search
+      ? `${creators.length} result${creators.length === 1 ? "" : "s"} for “${safe(state.search)}”`
+      : state.discoveryFilter === "for_you"
+        ? "Ranked from your games, languages, follows and Live signals"
+        : `${creators.length} creator${creators.length === 1 ? "" : "s"} in this view`;
+    const personCard = (item, index) => {
+      const session = item.sessions[0];
+      const following = state.follows.has(item.profile.id);
+      const reasons = creatorRecommendationReasons(item).slice(0, 3);
+      return `<article class="lc-v4-person-card" data-lc-explore-position="${index + 1}">
+        <button type="button" class="lc-v4-person-media" data-lc-open-creator="${safe(item.profile.id)}"><img src="${safe(visualImage(item.profile))}" alt="${safe(profileName(item.profile))} creator profile"><span class="lc-v3-live-pill ${session?.status === "live" ? "is-live" : ""}">${safe(sessionStatusLabel(session))}</span></button>
+        <div class="lc-v4-person-copy"><button type="button" class="lc-v4-person-identity" data-lc-open-creator="${safe(item.profile.id)}"><b>${safe(profileName(item.profile))}</b><span>${safe(item.creator.headline || (item.creator.games || []).slice(0, 2).join(" · ") || "Live Casino creator")}</span></button><button class="lc-product-chip ${following ? "active" : ""}" type="button" data-lc-follow="${safe(item.profile.id)}">${following ? "Following" : "Follow"}</button></div>
+        ${reasons.length ? `<div class="lc-v4-reason-row" aria-label="Why this creator">${reasons.map((reason) => `<span>${safe(reason)}</span>`).join("")}</div>` : ""}
+      </article>`;
+    };
     shell().innerHTML = `${top("Explore", "Find the person behind the table.")}
       <div class="lc-product-stack lc-v4-explore">
+        <section class="lc-v4-explore-hero"><div><span>DISCOVER PEOPLE</span><h1>Find your next Live table through a Creator.</h1><p>Search by person, game or language. Recommendations explain the signals used; no popularity or performance claim is implied.</p></div><div class="lc-v4-explore-state"><b>${liveCreators.length}</b><span>Live in this view</span></div></section>
         <form class="lc-v4-explore-search" data-lc-form="search"><input class="lc-product-input" name="search" maxlength="80" aria-label="Search creators, games or languages" placeholder="Search creators, games or languages" value="${safe(state.search)}"><button class="lc-product-btn" type="submit">SEARCH</button>${state.search ? `<button class="lc-product-chip" type="button" data-lc-clear-search>Clear</button>` : ""}</form>
-        <div class="lc-v4-filter-row">${Object.entries(filters).map(([value, label]) => `<button class="lc-product-chip ${state.discoveryFilter === value ? "active" : ""}" type="button" data-lc-discovery-filter="${value}">${label}</button>`).join("")}</div>
-        <section class="lc-v4-explore-grid">${creators.length ? creators.map((item) => {
-          const session = item.sessions[0];
-          const following = state.follows.has(item.profile.id);
-          return `<article class="lc-v4-person-card"><button type="button" class="lc-v4-person-media" data-lc-open-creator="${safe(item.profile.id)}"><img src="${safe(visualImage(item.profile))}" alt=""><span class="lc-v3-live-pill ${session?.status === "live" ? "is-live" : ""}">${safe(sessionStatusLabel(session))}</span></button><div class="lc-v4-person-copy"><div><b>${safe(profileName(item.profile))}</b><span>${safe((item.creator.games || []).slice(0, 2).join(" · ") || "Live Casino")}</span></div><button class="lc-product-chip ${following ? "active" : ""}" type="button" data-lc-follow="${safe(item.profile.id)}">${following ? "Following" : "Follow"}</button></div></article>`;
-        }).join("") : `<div class="lc-product-empty"><h2>No creators found</h2><p>Try another name, game, language or feed filter.</p></div>`}</section>
+        <div class="lc-v4-explore-controls"><div class="lc-v4-filter-row" aria-label="Explore filters">${Object.entries(filters).map(([value, label]) => `<button class="lc-product-chip ${state.discoveryFilter === value ? "active" : ""}" type="button" data-lc-discovery-filter="${value}">${label}</button>`).join("")}</div><p aria-live="polite">${resultContext}</p></div>
+        ${liveCreators.length ? `<section class="lc-v4-discovery-section lc-v4-live-discovery"><div class="lc-v4-social-section-head"><div><span>LIVE NOW</span><h2>Join the person, then choose where to play.</h2></div><b>${liveCreators.length}</b></div><div class="lc-v4-live-discovery-row">${liveCreators.map((item) => { const session = item.sessions[0]; return `<article><button type="button" data-lc-live="${safe(session.id)}"><img src="${safe(visualImage(item.profile))}" alt="${safe(profileName(item.profile))} Live session"><span class="lc-v4-feed-gradient"></span><i>LIVE</i><div><b>${safe(profileName(item.profile))}</b><small>${safe(session.game || "Live Casino")}</small></div></button></article>`; }).join("")}</div></section>` : ""}
+        <section class="lc-v4-discovery-section"><div class="lc-v4-social-section-head"><div><span>${state.discoveryFilter === "for_you" ? "FOR YOU" : safe(filters[state.discoveryFilter] || "RESULTS")}</span><h2>${state.discoveryFilter === "for_you" ? "Creators matched to your social signals." : "Creators in this view."}</h2></div><b>${creators.length}</b></div><div class="lc-v4-explore-grid">${creators.length ? creators.map(personCard).join("") : `<div class="lc-product-empty"><h2>No creators found</h2><p>Try another name, game, language or feed filter.</p></div>`}</div></section>
+        ${upcomingCreators.length ? `<section class="lc-v4-discovery-section"><div class="lc-v4-social-section-head"><div><span>UP NEXT</span><h2>Save a reason to return.</h2></div><b>${upcomingCreators.length}</b></div><div class="lc-v4-upcoming-list">${upcomingCreators.slice(0, 6).map((item) => { const session = item.sessions[0]; const saved = state.reminders.has(session.id); return `<article><button type="button" class="lc-v4-upcoming-person" data-lc-open-creator="${safe(item.profile.id)}"><img src="${safe(avatar(item.profile))}" alt=""><span><b>${safe(profileName(item.profile))}</b><small>${safe(session.title || session.game || "Live session")}</small></span></button><time>${safe(sessionLine(session))}</time><button class="lc-product-chip ${saved ? "active" : ""}" type="button" data-lc-reminder="${safe(session.id)}">${saved ? "Saved" : "Remind me"}</button></article>`; }).join("")}</div></section>` : ""}
+        ${contentEntries.length && state.discoveryFilter === "for_you" ? `<section class="lc-v4-discovery-section"><div class="lc-v4-social-section-head"><div><span>RECENT CONTENT</span><h2>Meet Creators before they go Live.</h2></div></div><div class="lc-v4-content-discovery">${contentEntries.map(({ item, post }) => `<button type="button" data-lc-open-creator="${safe(item.profile.id)}"><img src="${safe(visualImage(item.profile))}" alt=""><span class="lc-v4-feed-gradient"></span><div><b>${safe(profileName(item.profile))}</b><p>${safe(post.body)}</p></div></button>`).join("")}</div></section>` : ""}
+        <section class="lc-v4-feed-boundary"><b>Discovery stays inside LC. Gameplay does not.</b><span>Any Play action continues through an eligible licensed operator destination; LC does not handle funds, KYC or wagering.</span></section>
       </div>${tabs("explore")}`;
-    creators.slice(0, 20).forEach((item, index) => void trackProductEvent("creator_impression", { creatorId: item.profile.id, dedupeKey: `explore:${state.discoveryFilter}:${item.profile.id}`, metadata: { surface: "explore", position: index + 1, filter: state.discoveryFilter } }));
+    creators.slice(0, 20).forEach((item, index) => void trackProductEvent("creator_impression", { creatorId: item.profile.id, dedupeKey: `explore:${state.discoveryFilter}:${item.profile.id}`, metadata: { surface: "explore", position: index + 1, filter: state.discoveryFilter, recommendation_reasons: creatorRecommendationReasons(item).slice(0, 4), experience: "social_explore" } }));
   }
 
   function renderSocialActivity() {
@@ -1086,24 +1131,116 @@
     </form>`;
   }
 
+  function businessRoleCopy(subtype, isAdmin) {
+    if (isAdmin) return {
+      label: "ADMIN CONTROL",
+      title: "Policy, moderation and audit control",
+      description: "Review protected platform states without inheriting an operator workspace or exposing tenant data across boundaries.",
+      focus: "Platform control"
+    };
+    if (subtype === "provider") return {
+      label: "PROVIDER OPERATIONS",
+      title: "Distribution and identity readiness",
+      description: "Prepare normalized Live-product context and creator mappings for tenant-scoped operator delivery.",
+      focus: "Distribution readiness"
+    };
+    return {
+      label: "OPERATOR OPERATIONS",
+      title: "Creator acquisition operations",
+      description: "Prepare creator, campaign and Live handoff context for a licensed operator environment.",
+      focus: "Handoff readiness"
+    };
+  }
+
+  function businessState(label, tone = "neutral") {
+    return `<span class="lc-v4-ops-state is-${safe(tone)}">${safe(label)}</span>`;
+  }
+
+  function businessEmpty(title, body, stateLabel = "Not configured") {
+    return `<section class="lc-v4-ops-empty"><span>EMPTY STATE</span><h2>${safe(title)}</h2><p>${safe(body)}</p>${businessState(stateLabel)}</section>`;
+  }
+
+  function renderPerformanceWorkspace(subtype, isAdmin) {
+    const instrumentationLabel = state.demo ? "Contract preview" : state.analyticsAvailable ? "Contract available" : "Not available";
+    const instrumentationTone = state.analyticsAvailable ? "ready" : "locked";
+    const brief = state.pilotBriefs.find((row) => row.industry_subtype === subtype);
+    const attributionWindow = brief?.attribution_window_days ? `${safe(brief.attribution_window_days)} days · plan only` : "To be validated";
+    const eventContract = [
+      ["creator_impression", "Creator card or content enters the visible discovery surface"],
+      ["creator_profile_open", "A person opens an eligible Creator profile"],
+      ["creator_follow", "A person follows an eligible Creator"],
+      ["live_session_open", "A person opens an eligible Creator Live session"],
+      ["handoff_intent", "A person chooses to continue to a licensed operator"],
+      ["handoff_return", "A person returns to LC with attributable handoff context"]
+    ];
+    const eventRows = eventContract.map(([eventName, definition]) => `<tr><td><code>${safe(eventName)}</code></td><td>${safe(definition)}</td><td>${businessState(instrumentationLabel, instrumentationTone)}</td><td>${businessState("No count loaded", "neutral")}</td></tr>`).join("");
+    const validationStages = [
+      ["01", "Instrumented", "Named, first-party event contract exists in LC.", instrumentationLabel, instrumentationTone],
+      ["02", "Observed", "Event records must be collected in the authorized tenant scope.", "Not evidenced", "pending"],
+      ["03", "Reconciled", "Handoff and return context must pass data-quality checks.", "Not evidenced", "pending"],
+      ["04", "Customer-confirmed", "Any outcome claim requires licensed operator confirmation.", "To be validated", "locked"]
+    ].map(([index, title, body, label, tone]) => `<article><span>${safe(index)}</span><div><b>${safe(title)}</b><p>${safe(body)}</p></div>${businessState(label, tone)}</article>`).join("");
+    const adminBoundary = isAdmin
+      ? businessEmpty("No authorized evidence review", "Cross-tenant evidence is never aggregated in this client. An explicit privileged backend scope is required to inspect tenant records.", "Protected")
+      : renderPilotMeasurementBrief(subtype);
+    return `<section class="lc-v4-business-title"><div><span>EVIDENCE WORKSPACE</span><h1>Performance</h1><p>Separate event instrumentation, observed records and externally confirmed outcomes before making a performance claim.</p></div>${businessState("No commercial claims", "ready")}</section>
+      <section class="lc-v4-evidence-gates" aria-label="Evidence readiness">
+        <article><span>LC EVENT INSTRUMENTATION</span><b>${safe(instrumentationLabel)}</b><p>A defined event name is not an observed result.</p></article>
+        <article><span>ATTRIBUTION WINDOW</span><b>${attributionWindow}</b><p>A saved brief records a plan, not validated causality.</p></article>
+        <article><span>OPERATOR OUTCOMES</span><b>Not available</b><p>Gameplay, deposits, wagering and settlement remain outside LC.</p></article>
+        <article><span>COMMERCIAL VALIDATION</span><b>To be validated</b><p>CAC, retention, GGR and ROI need observed, reconciled evidence.</p></article>
+      </section>
+      <section class="lc-product-card lc-v4-event-contract"><div class="lc-product-section-head"><div><small>MEASUREMENT CONTRACT</small><h2>App-owned event taxonomy</h2></div><span>No result values</span></div><div class="lc-v4-table-wrap"><table class="lc-v4-table"><thead><tr><th>Event</th><th>Definition</th><th>Instrumentation</th><th>Evidence</th></tr></thead><tbody>${eventRows}</tbody></table></div><p class="lc-product-note">Event availability is evaluated inside the authorized account and tenant scope. Contract presence never implies volume, performance or partner validation.</p></section>
+      <section class="lc-product-card lc-v4-validation-ladder"><div class="lc-product-section-head"><div><small>CLAIM GATE</small><h2>Evidence validation ladder</h2></div><span>Fail closed</span></div><div>${validationStages}</div></section>
+      ${adminBoundary}
+      <section class="lc-product-card lc-v4-ops-boundary"><div><span>LC CAN EVIDENCE</span><b>Discovery · profile open · follow · Live open · handoff intent · attributable return</b></div><div><span>LC CANNOT EVIDENCE ALONE</span><b>Gameplay · deposits · wagering · settlement · responsible gaming · commercial impact</b></div></section>`;
+  }
+
   function renderIndustryHome(view = state.businessView) {
     const subtype = state.industry?.subtype || state.current?.industry_subtype || "operator";
     const request = state.accessRequests.find((row) => row.industry_subtype === subtype);
     const provider = subtype === "provider";
     const isAdmin = subtype === "admin" || ["admin", "moderator"].includes(state.profile?.role);
+    const role = businessRoleCopy(subtype, isAdmin);
     const sessions = state.creators.flatMap((item) => item.sessions.map((session) => ({ item, session })));
-    const status = safe(request?.status || state.industry?.access_status || (isAdmin ? "privileged role required" : "not requested"));
-    const creatorRows = state.creators.slice(0, 12).map((item) => `<tr><td><span class="lc-v4-table-person"><img src="${safe(avatar(item.profile))}" alt=""><b>${safe(profileName(item.profile))}</b></span></td><td>${safe(item.creator.verification_status || "unverified")}</td><td>${safe(item.creator.profile_status || "private")}</td><td>${safe(item.sessions[0] ? sessionStatusLabel(item.sessions[0]) : "No session")}</td></tr>`).join("");
-    const liveRows = sessions.slice(0, 12).map(({ item, session }) => `<tr><td>${safe(profileName(item.profile))}</td><td>${safe(session.game)}</td><td>${safe(session.status)}</td><td>${safe(session.operator_name || "Not mapped")}</td><td>${safe(session.visibility || "private")}</td></tr>`).join("");
+    const liveSessions = sessions.filter(({ session }) => session.status === "live");
+    const statusText = request?.status || state.industry?.access_status || (isAdmin ? "protected role" : "not requested");
+    const status = safe(statusText);
+    const recordScope = state.demo ? "Illustrative demo records" : "Tenant-scoped records";
+    const creatorRows = state.creators.slice(0, 12).map((item) => {
+      const creatorStatus = item.creator.verification_status || "unverified";
+      const publication = item.creator.profile_status || "private";
+      const next = item.sessions[0];
+      const roleCell = isAdmin
+        ? businessState("Protected review", "locked")
+        : provider
+          ? businessState("Mapping not configured", "pending")
+          : businessState("No campaign mapping", "pending");
+      return `<tr><td><span class="lc-v4-table-person"><img src="${safe(avatar(item.profile))}" alt=""><b>${safe(profileName(item.profile))}</b></span></td><td>${businessState(creatorStatus, creatorStatus === "approved" ? "ready" : "pending")}</td><td>${businessState(publication, publication === "published" ? "ready" : "neutral")}</td><td>${roleCell}</td><td>${safe(next ? sessionStatusLabel(next) : "No session")}</td></tr>`;
+    }).join("");
+    const liveRows = sessions.slice(0, 12).map(({ item, session }) => `<tr><td>${safe(profileName(item.profile))}</td><td>${safe(session.game || "Not specified")}</td><td>${businessState(session.status || "unknown", session.status === "live" ? "live" : "neutral")}</td><td>${safe(session.operator_name || "Not mapped")}</td><td>${businessState(session.visibility || "private", session.visibility === "public" ? "ready" : "locked")}</td></tr>`).join("");
+    const roleQueue = isAdmin
+      ? `<article><span>01</span><div><b>Moderation decisions</b><p>Visible only to authorized platform roles.</p></div>${businessState("Protected", "locked")}</article><article><span>02</span><div><b>Account enforcement</b><p>Suspension and reinstatement remain server-controlled.</p></div>${businessState("Fail closed", "ready")}</article><article><span>03</span><div><b>Audit trail</b><p>Administrative changes require attributable backend records.</p></div>${businessState("Privileged", "locked")}</article>`
+      : provider
+        ? `<article><span>01</span><div><b>Normalize catalog context</b><p>Define provider-neutral game and table identifiers.</p></div>${businessState("Not configured", "pending")}</article><article><span>02</span><div><b>Map creator identity</b><p>Keep external identity mapping explicit and tenant-scoped.</p></div>${businessState("Not configured", "pending")}</article><article><span>03</span><div><b>Prepare operator delivery</b><p>Validate contracts before any sandbox connection.</p></div>${businessState("No connection", "locked")}</article>`
+        : `<article><span>01</span><div><b>Review creator readiness</b><p>Use only verified, published creator records.</p></div>${businessState("Review required", "pending")}</article><article><span>02</span><div><b>Define campaign source</b><p>Attach campaign context before measuring handoffs.</p></div>${businessState("Not configured", "pending")}</article><article><span>03</span><div><b>Validate handoff route</b><p>Licensed operator destination and return contract are required.</p></div>${businessState("No connection", "locked")}</article>`;
+    const overviewCards = isAdmin
+      ? `<article><span>CONTROL SCOPE</span><b>Platform policy</b><p>Tenant access, moderation and audit boundaries.</p></article><article><span>QUEUE</span><b>Private by default</b><p>No moderation item is exposed to business tenants.</p></article><article><span>ACCOUNT STATE</span><b>Server enforced</b><p>Suspended-account denial cannot be overridden here.</p></article>`
+      : provider
+        ? `<article><span>SUPPLY SCOPE</span><b>${safe(recordScope)}</b><p>Creator and Live-product context available to this workspace.</p></article><article><span>ADAPTER STATE</span><b>No live connection</b><p>Credentials and official API contracts are still required.</p></article><article><span>OUTCOME</span><b>To be validated</b><p>No distribution or commercial impact is claimed.</p></article>`
+        : `<article><span>CREATOR SCOPE</span><b>${safe(recordScope)}</b><p>Discovery records do not imply commercial approval.</p></article><article><span>HANDOFF STATE</span><b>No live connection</b><p>No production operator destination is configured.</p></article><article><span>OUTCOME</span><b>To be validated</b><p>CAC, retention, GGR and ROI require observed evidence.</p></article>`;
+    const integrationCards = provider
+      ? `<article><header><b>Catalog ingestion</b>${businessState("Not configured", "pending")}</header><p>Normalized games, tables and availability contract.</p><small>Needs official API documentation and tenant credentials.</small></article><article><header><b>Creator identity mapping</b>${businessState("Not configured", "pending")}</header><p>External dealer identity to approved LC Creator record.</p><small>Must fail closed when an identity cannot be verified.</small></article><article><header><b>Operator distribution</b>${businessState("Unavailable", "locked")}</header><p>Tenant-scoped destinations and market availability.</p><small>No operator integration or approval is implied.</small></article><article><header><b>Signed events</b>${businessState("Unavailable", "locked")}</header><p>Webhook signature, idempotency and replay controls.</p><small>Server-side implementation required.</small></article>`
+      : `<article><header><b>Licensed destination</b>${businessState("Not configured", "pending")}</header><p>Allowlisted, server-generated handoff destination.</p><small>Jurisdiction and operator controls remain external.</small></article><article><header><b>Return attribution</b>${businessState("Contract only", "neutral")}</header><p>App-owned intent and attributable return event contract.</p><small>No gameplay or transaction data is collected by LC.</small></article><article><header><b>Campaign source</b>${businessState("Not configured", "pending")}</header><p>Tenant, creator and campaign source context.</p><small>Required before an evidence window can start.</small></article><article><header><b>Event delivery</b>${businessState("Unavailable", "locked")}</header><p>Signed, tenant-scoped server event exchange.</p><small>Credentials and external API documentation required.</small></article>`;
     const views = {
-      overview: `<section class="lc-v4-business-hero"><div><span>${safe(subtype.toUpperCase())} WORKSPACE</span><h1>Creator-led Live Casino operations</h1><p>Configure and measure the path from creator discovery to licensed operator handoff without moving gameplay or funds into LC.</p></div><span class="lc-v4-status">Access · ${status}</span></section><section class="lc-v4-business-kpis"><article><b>${state.creators.length}</b><span>Visible creators</span></article><article><b>${sessions.filter(({ session }) => session.status === "live").length}</b><span>Live sessions</span></article><article><b>Not available</b><span>Connected adapters</span></article><article><b>To be validated</b><span>Return impact</span></article></section><section class="lc-product-card"><div class="lc-product-section-head"><h2>Operating model</h2><span>Confirmed boundary</span></div><div class="lc-product-flow"><span>Creator</span><span>Audience</span><span>Live intent</span><span>Licensed handoff</span><span>Return</span></div><p>Gameplay, wallet, KYC/AML, wagering, settlement and responsible-gaming operations remain with licensed operator/provider infrastructure.</p></section>`,
-      creators: `<section class="lc-v4-business-title"><div><span>SUPPLY</span><h1>Creators</h1><p>Review discoverable creator identity and mapping readiness.</p></div><button class="lc-product-chip" type="button" disabled>Bulk actions · Not available</button></section><section class="lc-product-card lc-v4-table-wrap"><table class="lc-v4-table"><thead><tr><th>Creator</th><th>Verification</th><th>Publication</th><th>Next state</th></tr></thead><tbody>${creatorRows || `<tr><td colspan="4">No eligible creator records available.</td></tr>`}</tbody></table></section>`,
-      campaigns: `<section class="lc-v4-business-title"><div><span>ACQUISITION</span><h1>Campaigns</h1><p>Define campaign source and creator context before measurement begins.</p></div><button class="lc-product-btn" type="button" disabled>NEW CAMPAIGN</button></section><section class="lc-v4-empty-workspace"><h2>No campaign configured</h2><p>Campaign configuration requires an approved operator context and measurement plan. No ROI or acquisition uplift is claimed.</p><span>To be validated</span></section>`,
-      live: `<section class="lc-v4-business-title"><div><span>OPERATIONS</span><h1>Live</h1><p>Monitor normalized creator-session state without controlling gameplay.</p></div><span class="lc-v4-status">${sessions.filter(({ session }) => session.status === "live").length} Live</span></section><section class="lc-product-card lc-v4-table-wrap"><table class="lc-v4-table"><thead><tr><th>Creator</th><th>Game</th><th>Status</th><th>Operator mapping</th><th>Visibility</th></tr></thead><tbody>${liveRows || `<tr><td colspan="5">No session data available.</td></tr>`}</tbody></table></section>`,
-      performance: `<section class="lc-v4-business-title"><div><span>EVIDENCE</span><h1>Performance</h1><p>App-owned observed events only. CAC, retention, GGR and ROI remain To be validated.</p></div></section>${renderPilotMeasurementBrief(subtype)}<section class="lc-product-card"><div class="lc-product-section-head"><h2>Attribution contract</h2><span>Observed events</span></div><div class="lc-product-flow"><span>Impression</span><span>Profile</span><span>Follow</span><span>Live</span><span>Handoff</span><span>Return</span></div></section>`,
-      integrations: `<section class="lc-v4-business-title"><div><span>CONFIGURATION</span><h1>Integrations</h1><p>Provider-neutral contracts keep external adapters outside core product logic.</p></div><span class="lc-v4-status">No live connection</span></section><section class="lc-v4-integration-grid"><article><b>Catalog & tables</b><span>Not configured</span><p>Normalized ingestion contract; official API docs required.</p></article><article><b>Creator mapping</b><span>Not configured</span><p>External dealer identity ↔ LC creator mapping.</p></article><article><b>Launch session</b><span>Sandbox unavailable</span><p>Server-side, tenant-scoped adapter and credentials required.</p></article><article><b>Webhooks</b><span>Not configured</span><p>Signature verification, idempotency and replay protection required.</p></article></section>`,
-      safety: `<section class="lc-v4-business-title"><div><span>TRUST & SAFETY</span><h1>${isAdmin ? "Moderation control" : "Safety"}</h1><p>Reports, account states and creator controls remain role- and tenant-scoped.</p></div><span class="lc-v4-status">Fail closed</span></section><section class="lc-v4-safety-grid"><article><h2>Reports</h2><b>Private queue</b><p>Report ownership and moderation visibility are isolated by policy.</p></article><article><h2>Account status</h2><b>No client escalation</b><p>Suspended accounts are denied; users cannot approve themselves.</p></article><article><h2>Audit</h2><b>${isAdmin ? "Privileged visibility" : "Restricted"}</b><p>Administrative actions require authorized backend roles.</p></article></section>`,
-      settings: `<section class="lc-v4-business-title"><div><span>WORKSPACE</span><h1>Settings</h1><p>Organization, environment and access configuration.</p></div></section><section class="lc-product-card"><div class="lc-product-section-head"><h2>Organization</h2><span>${status}</span></div><p>${safe(state.industry?.company_name || (state.demo ? "Illustrative organization" : "Company profile not completed"))}</p>${isAdmin ? `<span class="lc-product-note">Admin permissions come from the protected account role, never this product view.</span>` : `<button class="lc-product-btn" type="button" data-lc-request-access="${safe(subtype)}">REQUEST PARTNERSHIP ACCESS</button><span class="lc-product-note">Submission cannot self-approve access or configure production integration.</span>`}</section>`
+      overview: `<section class="lc-v4-business-hero lc-v4-ops-hero"><div><span>${safe(role.label)}</span><h1>${safe(role.title)}</h1><p>${safe(role.description)}</p></div><div class="lc-v4-ops-hero-status"><small>WORKSPACE ACCESS</small>${businessState(status, isAdmin ? "locked" : "neutral")}</div></section><section class="lc-v4-ops-context" aria-label="Workspace evidence scope">${overviewCards}</section><section class="lc-product-card lc-v4-ops-queue"><div class="lc-product-section-head"><div><small>NEXT ACTIONS</small><h2>${safe(role.focus)}</h2></div><span>${safe(recordScope)}</span></div><div>${roleQueue}</div></section><section class="lc-product-card lc-v4-ops-boundary"><div><span>LC RESPONSIBILITY</span><b>Discovery · creator identity · social signals · handoff intent · attributable return</b></div><div><span>LICENSED INFRASTRUCTURE</span><b>Gameplay · wallet · KYC/AML · wagering · settlement · responsible gaming</b></div></section>`,
+      creators: `<section class="lc-v4-business-title"><div><span>${isAdmin ? "IDENTITY CONTROL" : provider ? "IDENTITY MAPPING" : "CREATOR ROSTER"}</span><h1>Creators</h1><p>${isAdmin ? "Inspect protected verification and publication state without changing it from the client." : provider ? "Review approved identity records before mapping external Live-product context." : "Review creator eligibility before campaign or handoff configuration."}</p></div>${businessState(recordScope)}</section><section class="lc-v4-ops-toolbar" aria-label="Creator table controls"><label><span>SEARCH</span><input type="search" placeholder="Search creator" disabled></label><label><span>STATUS</span><select disabled><option>All verification states</option></select></label><button type="button" disabled>Bulk actions unavailable</button></section><section class="lc-product-card lc-v4-table-wrap"><table class="lc-v4-table"><thead><tr><th>Creator</th><th>Verification</th><th>Publication</th><th>${isAdmin ? "Control scope" : provider ? "Provider mapping" : "Campaign mapping"}</th><th>Next session</th></tr></thead><tbody>${creatorRows || `<tr><td colspan="5">No eligible creator records available.</td></tr>`}</tbody></table></section><p class="lc-product-note">Creator verification and affiliation approval remain server-controlled. Demo records are illustrative and do not represent partners or approvals.</p>`,
+      campaigns: `<section class="lc-v4-business-title"><div><span>${provider ? "DISTRIBUTION PLAN" : isAdmin ? "POLICY VISIBILITY" : "ACQUISITION PLAN"}</span><h1>Campaigns</h1><p>${isAdmin ? "Campaign records are visible only when authorized policy or audit scope requires them." : provider ? "Define operator, creator and catalog scope before distribution evidence begins." : "Define source, creator and licensed destination before measuring acquisition evidence."}</p></div>${businessState("No active configuration", "pending")}</section>${businessEmpty(isAdmin ? "No campaign audit context" : provider ? "No distribution plan configured" : "No campaign configured", isAdmin ? "Nothing is available in the current protected scope." : "An approved tenant context and measurement brief are required before activation.", "To be validated")}`,
+      live: `<section class="lc-v4-business-title"><div><span>${provider ? "DISTRIBUTION MONITOR" : isAdmin ? "SESSION OVERSIGHT" : "LIVE OPERATIONS"}</span><h1>Live</h1><p>${isAdmin ? "Review protected session publication state; LC never controls gameplay." : provider ? "Inspect normalized creator-session context before operator distribution." : "Monitor creator-session readiness and licensed handoff mapping."}</p></div>${businessState(state.demo ? `${liveSessions.length} illustrative Live` : `${liveSessions.length} Live`, liveSessions.length ? "live" : "neutral")}</section><section class="lc-v4-ops-toolbar" aria-label="Live table controls"><label><span>SESSION STATE</span><select disabled><option>All states</option></select></label><label><span>MAPPING</span><select disabled><option>All mapping states</option></select></label><button type="button" disabled>Export unavailable</button></section><section class="lc-product-card lc-v4-table-wrap"><table class="lc-v4-table"><thead><tr><th>Creator</th><th>Game</th><th>Status</th><th>Operator mapping</th><th>Visibility</th></tr></thead><tbody>${liveRows || `<tr><td colspan="5">No session data available.</td></tr>`}</tbody></table></section><p class="lc-product-note">Session records describe LC social state only. They do not prove operator availability, gameplay activity or commercial performance.</p>`,
+      performance: renderPerformanceWorkspace(subtype, isAdmin),
+      integrations: `<section class="lc-v4-business-title"><div><span>${isAdmin ? "PLATFORM CONTROLS" : "CONFIGURATION"}</span><h1>Integrations</h1><p>${isAdmin ? "Inspect integration policy and audit boundaries without exposing credentials." : provider ? "Prepare provider-neutral data contracts for tenant-scoped delivery." : "Prepare a licensed handoff and event contract without moving regulated operations into LC."}</p></div>${businessState("No live connection", "locked")}</section>${isAdmin ? `<section class="lc-v4-safety-grid"><article><h2>Secrets</h2><b>Server only</b><p>No credential or service role is available to this client.</p></article><article><h2>Tenant policy</h2><b>Fail closed</b><p>Cross-tenant reads and writes require protected backend authorization.</p></article><article><h2>Audit delivery</h2><b>Not configured</b><p>No external control-plane integration is claimed.</p></article></section>` : `<section class="lc-v4-integration-grid lc-v4-ops-integrations">${integrationCards}</section>`}`,
+      safety: `<section class="lc-v4-business-title"><div><span>TRUST & SAFETY</span><h1>${isAdmin ? "Moderation control" : "Safety & policy"}</h1><p>${isAdmin ? "Protected moderation, account state and audit surfaces remain separate from tenant operations." : "View policy posture for this tenant; moderation records remain private and role-scoped."}</p></div>${businessState("Fail closed", "ready")}</section><section class="lc-v4-safety-grid"><article><h2>Reports</h2><b>${isAdmin ? "Protected moderation queue" : "No queue access"}</b><p>Report ownership and visibility remain isolated by backend policy.</p></article><article><h2>Account status</h2><b>Server-enforced denial</b><p>Suspended accounts cannot continue through this client.</p></article><article><h2>Creator controls</h2><b>No client approval</b><p>Publication and affiliation verification cannot be escalated here.</p></article><article><h2>Audit</h2><b>${isAdmin ? "Privileged scope required" : "Restricted"}</b><p>Administrative actions require an authorized backend role and attributable record.</p></article></section>`,
+      settings: `<section class="lc-v4-business-title"><div><span>${isAdmin ? "PLATFORM ACCESS" : "WORKSPACE"}</span><h1>Settings</h1><p>${isAdmin ? "Protected role and environment context." : "Organization, environment and partnership access state."}</p></div>${businessState(status, isAdmin ? "locked" : "neutral")}</section><section class="lc-v4-ops-settings"><article><span>ORGANIZATION</span><h2>${safe(state.industry?.company_name || (state.demo ? "Illustrative organization" : "Company profile not completed"))}</h2><p>${state.demo ? "Demo label only; no real organization, partner or approval is represented." : "Organization details are tenant-scoped."}</p></article><article><span>ENVIRONMENT</span><h2>${state.demo ? "Demonstration" : "Not configured"}</h2><p>No production integration or readiness is implied.</p></article><article><span>ACCESS</span><h2>${status}</h2><p>${isAdmin ? "Admin permissions come from the protected account role, never this view." : "A submission cannot self-approve access or configure an integration."}</p></article></section>${isAdmin ? "" : `<section class="lc-product-card"><button class="lc-product-btn" type="button" data-lc-request-access="${safe(subtype)}">REQUEST PARTNERSHIP ACCESS</button><span class="lc-product-note">Request status remains pending until reviewed by an authorized backend process.</span></section>`}`
     };
     const selected = Object.prototype.hasOwnProperty.call(views, view) ? view : "overview";
     state.businessView = selected;
@@ -1121,24 +1258,21 @@
     const following = state.follows.has(item.profile.id);
     const gamesLabel = (item.creator.games || []).join(" · ") || "Live Casino";
     const languageLabel = (item.creator.languages || item.profile.languages || []).join(" · ") || "Language not listed";
+    const scheduled = item.sessions.filter((session) => session.status === "scheduled");
     shell().innerHTML = `${top(profileName(item.profile), isLive ? "Live now" : "Creator profile")}
-      <div class="lc-product-stack lc-v3-creator-profile">
-        <section class="lc-v3-profile-hero">
-<img class="lc-v3-profile-cover" src="${safe(visualImage(item.profile))}" alt=""><div class="lc-v3-featured-shade"></div>
-<div class="lc-v3-profile-status"><span class="lc-v3-live-pill ${isLive ? "is-live" : ""}">${safe(sessionStatusLabel(next))}</span></div>
-<div class="lc-v3-profile-copy"><h1>${safe(profileName(item.profile))}</h1><p>${safe(item.creator.headline || "Live Casino creator")}</p><div class="lc-v3-meta-line"><span>${safe(gamesLabel)}</span><span>${safe(languageLabel)}</span>${item.profile.country ? `<span>${safe(item.profile.country)}</span>` : ""}</div></div>
+      <div class="lc-product-stack lc-v4-creator-page">
+        <section class="lc-v4-creator-hero">
+          <img src="${safe(visualImage(item.profile))}" alt="${safe(profileName(item.profile))} at a Live Casino table"><div class="lc-v4-creator-hero-shade"></div>
+          <div class="lc-v4-creator-hero-state"><span class="lc-v3-live-pill ${isLive ? "is-live" : ""}">${safe(sessionStatusLabel(next))}</span></div>
+          <div class="lc-v4-creator-identity"><img src="${safe(avatar(item.profile))}" alt=""><div><span>${safe(item.profile.username ? "@" + item.profile.username : "CREATOR")}</span><h1>${safe(profileName(item.profile))}</h1><p>${safe(item.creator.headline || "Live Casino creator")}</p></div></div>
         </section>
-        <section class="lc-v3-profile-actions"><button class="lc-product-btn ${following ? "secondary active" : ""}" type="button" data-lc-follow="${safe(item.profile.id)}">${following ? "FOLLOWING" : "FOLLOW"}</button>${creatorLiveAlertControl(item.profile.id)}${next ? `<button class="lc-product-btn" type="button" data-lc-live="${safe(next.id)}">${isLive ? `PLAY WITH ${safe(profileName(item.profile)).toUpperCase()}` : "VIEW NEXT SESSION"}</button>` : ""}</section>
-
-        <section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">ABOUT</span><h2>Why follow ${safe(profileName(item.profile))}</h2></div></div><p class="lc-v3-body-copy">${safe(item.profile.bio || item.creator.headline || "Follow this creator to keep their identity, schedule and Live status connected across sessions.")}</p><div class="lc-v3-identity-strip"><span>${safe(item.creator.affiliation_name || "Affiliation not listed")}</span><span>${safe(item.creator.affiliation_verification_status || "unverified")}</span></div></section>
-
-        ${next ? `<section class="lc-v3-next-session"><div><span class="lc-v3-kicker">${isLive ? "LIVE SESSION" : "NEXT SESSION"}</span><h2>${safe(next.game)} · ${safe(next.title || "Live session")}</h2><p>${safe(next.operator_name || "Operator to be confirmed")} · ${safe(sessionLine(next))}</p></div><div class="lc-product-actions">${isLive ? `<button class="lc-product-btn" type="button" data-lc-live="${safe(next.id)}">OPEN LIVE</button>` : `<button class="lc-product-btn ${state.reminders.has(next.id) ? "secondary" : ""}" type="button" data-lc-reminder="${safe(next.id)}">${state.reminders.has(next.id) ? "REMINDER SET" : "REMIND ME"}</button>`}</div></section>` : `<section class="lc-product-card lc-product-empty"><h2>No session scheduled</h2><p>Follow this creator to keep them in your feed when a new session appears.</p></section>`}
-
-        ${item.posts.length ? `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">CONTENT</span><h2>Recent updates</h2></div><span>${item.posts.length}</span></div><div class="lc-v3-content-grid">${item.posts.slice(0,3).map((p, index) => `<article class="lc-v3-content-card ${index === 0 ? "featured" : ""}"><img src="${safe(visualImage(item.profile))}" alt=""><div><small>${safe(new Date(p.created_at).toLocaleString())}</small><p>${safe(p.body)}</p></div></article>`).join("")}</div></section>` : ""}
-
-        ${item.sessions.length > 1 ? `<section class="lc-v3-section"><div class="lc-v3-section-head"><div><span class="lc-v3-kicker">SCHEDULE</span><h2>Upcoming</h2></div></div>${item.sessions.slice(1).map((s) => `<div class="lc-v3-session-row"><div><b>${safe(s.game)} · ${safe(s.title || "Live session")}</b><span>${safe(sessionLine(s))}</span></div>${s.status === "scheduled" ? `<button class="lc-product-chip ${state.reminders.has(s.id) ? "active" : ""}" type="button" data-lc-reminder="${safe(s.id)}">${state.reminders.has(s.id) ? "Saved" : "Remind me"}</button>` : `<button class="lc-product-chip" type="button" data-lc-live="${safe(s.id)}">Open</button>`}</div>`).join("")}</section>` : ""}
-
-        ${!state.demo ? `<section class="lc-v3-safety-footer"><button type="button" data-lc-creator-safety="report" data-lc-creator-id="${safe(id)}">Report</button><span>·</span><button type="button" data-lc-creator-safety="block" data-lc-creator-id="${safe(id)}">Block</button></section>` : ""}
+        <section class="lc-v4-creator-actions"><button class="lc-product-btn ${following ? "secondary active" : ""}" type="button" data-lc-follow="${safe(item.profile.id)}">${following ? "FOLLOWING" : "FOLLOW"}</button>${creatorLiveAlertControl(item.profile.id)}${next ? `<button class="lc-product-btn lc-v4-creator-primary" type="button" data-lc-live="${safe(next.id)}">${isLive ? "JOIN LIVE" : "VIEW NEXT LIVE"}</button>` : ""}</section>
+        <section class="lc-v4-creator-facts" aria-label="Creator profile activity"><article><b>${item.posts.length}</b><span>Updates</span></article><article><b>${scheduled.length}</b><span>Upcoming</span></article><article><b>${(item.creator.games || []).length}</b><span>Games</span></article></section>
+        <section class="lc-v4-creator-about"><div><span>ABOUT</span><h2>${safe(item.profile.bio || item.creator.headline || "Follow this creator to keep their identity, schedule and Live status connected across sessions.")}</h2></div><div class="lc-v4-creator-tags"><span>${safe(gamesLabel)}</span><span>${safe(languageLabel)}</span>${item.profile.country ? `<span>${safe(item.profile.country)}</span>` : ""}<span>${safe(item.creator.affiliation_name || "Affiliation not listed")} · ${safe(item.creator.affiliation_verification_status || "unverified")}</span></div></section>
+        ${next ? `<section class="lc-v4-next-live ${isLive ? "is-live" : ""}"><div><span>${isLive ? "LIVE NOW" : "NEXT LIVE"}</span><h2>${safe(next.title || "Live session")}</h2><p>${safe(next.game)} · ${safe(sessionLine(next))}</p><small>${safe(next.operator_name || "Operator context not set")} · operator context is not an LC approval</small></div>${isLive ? `<button class="lc-product-btn" type="button" data-lc-live="${safe(next.id)}">OPEN LIVE</button>` : `<button class="lc-product-btn ${state.reminders.has(next.id) ? "secondary" : ""}" type="button" data-lc-reminder="${safe(next.id)}">${state.reminders.has(next.id) ? "REMINDER SET" : "REMIND ME"}</button>`}</section>` : `<section class="lc-v4-creator-empty"><h2>No session scheduled</h2><p>Follow this creator to keep them in your feed when a new session appears.</p></section>`}
+        <section class="lc-v4-creator-content"><div class="lc-v4-social-section-head"><div><span>CONTENT</span><h2>Recent updates</h2></div><b>${item.posts.length}</b></div>${item.posts.length ? `<div class="lc-v4-creator-content-grid">${item.posts.slice(0,6).map((post) => `<article><img src="${safe(visualImage(item.profile))}" alt=""><div><time>${safe(new Date(post.created_at).toLocaleString())}</time><p>${safe(post.body)}</p></div></article>`).join("")}</div>` : `<div class="lc-v4-creator-empty"><p>No public updates yet.</p></div>`}</section>
+        ${scheduled.length > (isLive ? 0 : 1) ? `<section class="lc-v4-creator-schedule"><div class="lc-v4-social-section-head"><div><span>SCHEDULE</span><h2>More return moments</h2></div></div>${scheduled.filter((session) => session.id !== next?.id).map((session) => `<article><div><span>${safe(session.game)}</span><b>${safe(session.title || "Live session")}</b><small>${safe(sessionLine(session))}</small></div><button class="lc-product-chip ${state.reminders.has(session.id) ? "active" : ""}" type="button" data-lc-reminder="${safe(session.id)}">${state.reminders.has(session.id) ? "Saved" : "Remind me"}</button></article>`).join("")}</section>` : ""}
+        <section class="lc-v4-creator-safety" aria-label="Creator safety actions"><span>Keep your experience safe</span><div><button type="button" data-lc-creator-safety="report" data-lc-creator-id="${safe(id)}">Report</button><button type="button" data-lc-creator-safety="block" data-lc-creator-id="${safe(id)}">Block</button></div></section>
       </div>${tabs("explore")}`;
   }
 
@@ -1150,8 +1284,26 @@
     shell().innerHTML = `${top(report ? "Report Creator" : "Block Creator", "Safety control")}
       <div class="lc-product-stack">
         <section class="lc-product-card"><div class="lc-product-row"><img src="${safe(avatar(item.profile))}" alt=""><div class="lc-product-row-main"><b>${safe(name)}</b><span>${safe(item.profile.username ? "@" + item.profile.username : "Creator profile")}</span></div></div></section>
-        ${report ? `<form class="lc-product-card lc-product-form" data-lc-form="creator-report" data-lc-creator-id="${safe(id)}"><h2>Why are you reporting this profile?</h2><select class="lc-product-select" name="reason">${reportReasons.map(([value, label]) => `<option value="${safe(value)}">${safe(label)}</option>`).join("")}</select><textarea class="lc-product-textarea" name="description" maxlength="500" placeholder="Optional context for the moderation team"></textarea><span class="lc-product-note">Your report is private. Submission does not automatically remove or penalize the profile.</span><div class="lc-product-actions"><button class="lc-product-btn" type="submit">SUBMIT REPORT</button><button class="lc-product-chip" type="button" data-lc-open-creator="${safe(id)}">Cancel</button></div></form>` : `<section class="lc-product-card"><h2>Remove ${safe(name)} from your experience?</h2><p>You will no longer see this Creator in LC discovery. New follow interactions between your accounts will be denied while the block is active.</p><span class="lc-product-note">Blocking is private and can be reversed from Account → Safety.</span><div class="lc-product-actions"><button class="lc-product-btn" type="button" data-lc-confirm-block="${safe(id)}">BLOCK CREATOR</button><button class="lc-product-chip" type="button" data-lc-open-creator="${safe(id)}">Cancel</button></div></section>`}
+        ${report ? `<form class="lc-product-card lc-product-form" data-lc-form="creator-report" data-lc-creator-id="${safe(id)}"><h2>Why are you reporting this profile?</h2><select class="lc-product-select" name="reason" ${state.demo ? "disabled" : ""}>${reportReasons.map(([value, label]) => `<option value="${safe(value)}">${safe(label)}</option>`).join("")}</select><textarea class="lc-product-textarea" name="description" maxlength="500" placeholder="Optional context for the moderation team" ${state.demo ? "disabled" : ""}></textarea><span class="lc-product-note">${state.demo ? "Preview only. Sign in to send a private report; no report is created here." : "Your report is private. Submission does not automatically remove or penalize the profile."}</span><div class="lc-product-actions"><button class="lc-product-btn" type="submit" ${state.demo ? "disabled" : ""}>${state.demo ? "SIGN IN REQUIRED" : "SUBMIT REPORT"}</button><button class="lc-product-chip" type="button" data-lc-open-creator="${safe(id)}">Cancel</button></div></form>` : `<section class="lc-product-card"><h2>Remove ${safe(name)} from your experience?</h2><p>You will no longer see this Creator in LC discovery. New follow interactions between your accounts will be denied while the block is active.</p><span class="lc-product-note">${state.demo ? "Preview only. Sign in to create a private block; the demo does not change any account." : "Blocking is private and can be reversed from Profile → Safety center."}</span><div class="lc-product-actions"><button class="lc-product-btn" type="button" data-lc-confirm-block="${safe(id)}" ${state.demo ? "disabled" : ""}>${state.demo ? "SIGN IN REQUIRED" : "BLOCK CREATOR"}</button><button class="lc-product-chip" type="button" data-lc-open-creator="${safe(id)}">Cancel</button></div></section>`}
       </div>${tabs("explore")}`;
+  }
+
+  function renderSocialSafety() {
+    const status = state.demo ? "Illustrative active state" : String(state.profile?.account_status || "unavailable");
+    shell().innerHTML = `${top("Safety center", "Private controls and account boundaries")}
+      <div class="lc-product-stack lc-v4-safety-center">
+        <section class="lc-v4-safety-hero"><span class="lc-v3-kicker">TRUST & SAFETY</span><h1>You control who reaches your social experience.</h1><p>Reports, blocks, notification preferences and account access remain private and isolated from business workspaces.</p></section>
+        <section class="lc-v4-safety-cards">
+          <article><span>ACCOUNT STATUS</span><b>${safe(status)}</b><p>Access is enforced by the backend. A suspended or disabled account cannot continue into LC.</p></article>
+          <article><span>REPORTS</span><b>Private submission</b><p>A report does not automatically remove or penalize a Creator. Moderation visibility remains role-scoped.</p></article>
+          <article><span>BLOCKING</span><b>Relationship boundary</b><p>Blocked profiles leave discovery, and new follow or return interactions are denied.</p></article>
+          <article><span>BUSINESS ACCESS</span><b>Separated</b><p>Operator and Provider tenants cannot read personal reports, blocks or notification settings.</p></article>
+        </section>
+        <section class="lc-v4-profile-controls"><div class="lc-v4-social-section-head"><div><span>YOUR CONTROLS</span><h2>Privacy and signals</h2></div></div><div class="lc-v4-settings-list">
+          ${state.demo ? `<button type="button" disabled><span><b>Live creator signals</b><small>Preview only · in-app delivery</small></span><i>○</i></button><button type="button" disabled><span><b>Blocked creators</b><small>Sign in to manage private blocks</small></span><i>›</i></button><button type="button" data-lc-demo-exit><span><b>Secure account settings</b><small>Sign in for password, privacy and deletion</small></span><i>›</i></button>` : `<button type="button" data-lc-live-signals ${state.returnSignalsAvailable ? "" : "disabled"}><span><b>Live creator signals</b><small>${state.returnSignalsAvailable ? (state.liveSignalsEnabled ? "On · in-app only" : "Muted") : "Not available"}</small></span><i>${state.liveSignalsEnabled ? "●" : "○"}</i></button><button type="button" data-lc-blocked-list><span><b>Blocked creators</b><small>${state.blockedIds.size} blocked</small></span><i>›</i></button><button type="button" data-auth-route="profile"><span><b>Privacy, password and deletion</b><small>Secure account settings</small></span><i>›</i></button>`}
+        </div></section>
+        <button class="lc-product-btn secondary" type="button" data-lc-product="profile">BACK TO PROFILE</button>
+      </div>${tabs("profile")}`;
   }
 
   function renderBlockedCreators() {
@@ -1174,18 +1326,12 @@
     const isLive = session.status === "live";
     const following = state.follows.has(item.profile.id);
     shell().innerHTML = `${top(isLive ? "Live now" : "Upcoming", profileName(item.profile))}
-      <div class="lc-product-stack lc-v3-live-screen">
-        <section class="lc-v3-live-stage">
-<img src="${safe(visualImage(item.profile))}" alt=""><div class="lc-v3-featured-shade"></div>
-<div class="lc-v3-live-stage-top"><span class="lc-v3-live-pill ${isLive ? "is-live" : ""}">${safe(sessionStatusLabel(session))}</span><span>${safe(session.game)}</span></div>
-<div class="lc-v3-live-stage-copy"><span class="lc-v3-kicker">${safe(session.operator_name || "Operator to be confirmed")}</span><h1>${safe(profileName(item.profile))}</h1><p>${safe(session.title || "Live table session")} · ${safe(new Date(session.starts_at).toLocaleString())}</p></div>
-        </section>
-        <section class="lc-v3-live-cta">
-${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data-lc-product="handoff">CONTINUE TO PLAY WITH ${safe(profileName(item.profile)).toUpperCase()}</button>` : `<button class="lc-product-btn lc-v3-primary-wide ${state.reminders.has(session.id) ? "secondary" : ""}" type="button" data-lc-reminder="${safe(session.id)}">${state.reminders.has(session.id) ? "REMINDER SET" : "REMIND ME WHEN IT STARTS"}</button>`}
-<button class="lc-product-btn secondary ${following ? "active" : ""}" type="button" data-lc-follow="${safe(item.profile.id)}">${following ? "FOLLOWING" : "FOLLOW CREATOR"}</button>
-        </section>
-        <section class="lc-v3-context-card"><span class="lc-v3-kicker">WHY THIS SCREEN EXISTS</span><h2>Keep the person, not just the table.</h2><p>LC connects creator identity, follow state, schedule and Live intent. The licensed operator remains responsible for gameplay and the regulated transaction.</p><div class="lc-v3-boundary-grid"><div><b>LC keeps</b><span>Creator · Follow · Schedule · Return context</span></div><div><b>Operator keeps</b><span>Game · Wallet · KYC/AML · Wagering · Settlement</span></div></div></section>
-        <button class="lc-v3-text-link" type="button" data-lc-open-creator="${safe(item.profile.id)}">View ${safe(profileName(item.profile))}'s profile</button>
+      <div class="lc-product-stack lc-v4-live-page">
+        <section class="lc-v4-live-stage"><img src="${safe(visualImage(item.profile))}" alt="${safe(profileName(item.profile))} Live session"><div class="lc-v4-live-stage-shade"></div><div class="lc-v4-live-stage-top"><span class="lc-v3-live-pill ${isLive ? "is-live" : ""}">${safe(sessionStatusLabel(session))}</span><span>${safe(session.game)}</span></div><div class="lc-v4-live-identity"><img src="${safe(avatar(item.profile))}" alt=""><div><span>${safe(session.title || "Live table session")}</span><h1>${safe(profileName(item.profile))}</h1><p>${safe(new Date(session.starts_at).toLocaleString())}</p></div></div></section>
+        <section class="lc-v4-live-actions">${isLive ? `<button class="lc-product-btn lc-v4-live-primary" type="button" data-lc-product="handoff">CONTINUE TO LICENSED OPERATOR</button>` : `<button class="lc-product-btn lc-v4-live-primary ${state.reminders.has(session.id) ? "secondary" : ""}" type="button" data-lc-reminder="${safe(session.id)}">${state.reminders.has(session.id) ? "REMINDER SET" : "REMIND ME WHEN IT STARTS"}</button>`}<button class="lc-product-btn secondary ${following ? "active" : ""}" type="button" data-lc-follow="${safe(item.profile.id)}">${following ? "FOLLOWING" : "FOLLOW CREATOR"}</button></section>
+        <section class="lc-v4-live-context"><div><span>CREATOR CONTEXT</span><b>${safe(profileName(item.profile))} · ${safe(session.game)}</b><p>Follow and return context stays in LC.</p></div><div><span>OPERATOR CONTEXT</span><b>${safe(session.operator_name || "Not configured")}</b><p>This label is not proof of integration, approval or availability.</p></div></section>
+        <section class="lc-v4-live-boundary"><b>LC connects the person to the Live moment.</b><p>The licensed operator remains responsible for gameplay, wallet, KYC/AML, wagering, settlement and responsible-gaming operations.</p></section>
+        <button class="lc-v4-journey-back" type="button" data-lc-open-creator="${safe(item.profile.id)}">← Back to ${safe(profileName(item.profile))}</button>
       </div>${tabs("explore")}`;
   }
 
@@ -1198,11 +1344,12 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     state.selectedSession = session.id;
     void trackProductEvent("handoff_intent", { creatorId: entry.profile.id, sessionId: session.id, confidence: "direct", dedupeKey: `handoff:${session.id}` });
     shell().innerHTML = `${top("Continue to operator", `${session.game} with ${profileName(entry.profile)}`)}
-      <div class="lc-product-stack lc-v3-handoff">
-        <section class="lc-v3-handoff-hero"><img src="${safe(visualImage(entry.profile))}" alt=""><div class="lc-v3-featured-shade"></div><div class="lc-v3-handoff-copy"><span class="lc-v3-live-pill is-live">LIVE</span><h1>You are leaving LC App to play.</h1><p>${safe(profileName(entry.profile))} · ${safe(session.game)} · ${safe(session.operator_name || "Operator to be confirmed")}</p></div></section>
-        <section class="lc-v3-handoff-boundary"><div class="lc-v3-boundary-icon">LC</div><div><b>LC creates and measures the handoff intent.</b><span>Gameplay, money movement, KYC/AML and responsible-gaming controls stay with the licensed operator.</span></div></section>
-        <section class="lc-v3-handoff-actions"><button class="lc-product-btn lc-v3-primary-wide" type="button" data-lc-return-live="${safe(session.id)}">SIMULATE OPERATOR RETURN</button><button class="lc-product-btn secondary" type="button" data-lc-open-creator="${safe(entry.profile.id)}">BACK TO CREATOR</button><span class="lc-product-note">${state.demo ? "Demo flow only." : "Conceptual handoff only."} No production operator integration is claimed.</span></section>
-        <section class="lc-v3-context-card"><span class="lc-v3-kicker">RETURN LOOP</span><h2>The game session can end. The creator relationship does not have to.</h2><p>When the player returns, LC can preserve who drove the intent and reconnect the player with the same creator, follow state and future schedule.</p></section>
+      <div class="lc-product-stack lc-v4-handoff-page">
+        <section class="lc-v4-handoff-hero"><img src="${safe(visualImage(entry.profile))}" alt=""><div><span>LEAVING LC APP</span><h1>Continue with the licensed operator.</h1><p>${safe(profileName(entry.profile))} · ${safe(session.game)}</p></div></section>
+        <section class="lc-v4-handoff-steps" aria-label="Handoff boundaries"><article><span>01</span><div><b>LC records intent</b><p>Creator, session and return context stay attributable inside LC.</p></div></article><article><span>02</span><div><b>The operator owns play</b><p>Gameplay, account, funds, KYC/AML and responsible-gaming controls remain external.</p></div></article><article><span>03</span><div><b>You can return to the person</b><p>Follow state, content and future Live signals remain connected to this Creator.</p></div></article></section>
+        <section class="lc-v4-handoff-destination"><div><span>DESTINATION</span><h2>${safe(session.operator_name || "Operator not configured")}</h2><p>${state.demo ? "Illustrative demo label only." : "No allowlisted production destination is configured in this client."}</p></div>${state.demo ? `<button class="lc-product-btn lc-v4-live-primary" type="button" data-lc-return-live="${safe(session.id)}">SIMULATE OPERATOR RETURN</button>` : `<button class="lc-product-btn lc-v4-live-primary" type="button" disabled>DESTINATION NOT CONFIGURED</button>`}</section>
+        <p class="lc-v4-handoff-disclosure">${state.demo ? "Demo flow only." : "Conceptual handoff only."} No operator integration, license, approval or production availability is claimed.</p>
+        <button class="lc-v4-journey-back" type="button" data-lc-live="${safe(session.id)}">← Back to Live</button>
       </div>${tabs("explore")}`;
   }
 
@@ -1227,7 +1374,8 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
         ${persona === "player" && state.player ? `<section class="lc-v4-profile-preferences"><div class="lc-v4-social-section-head"><div><span>YOUR FEED</span><h2>Discovery preferences</h2></div></div><div><article><small>GAMES</small><p>${safe((state.player.favorite_games || []).join(" · ") || "Not set")}</p></article><article><small>LANGUAGES</small><p>${safe((state.player.preferred_languages || []).join(" · ") || "Not set")}</p></article></div></section>` : ""}
         <section class="lc-v4-profile-controls"><div class="lc-v4-social-section-head"><div><span>ACCOUNT</span><h2>Settings and safety</h2></div></div>
           <div class="lc-v4-settings-list">
-            ${state.demo ? "" : `<button type="button" data-lc-live-signals ${state.returnSignalsAvailable ? "" : "disabled"}><span><b>Live creator signals</b><small>${state.returnSignalsAvailable ? (state.liveSignalsEnabled ? "On · in-app only" : "Muted") : "Not available"}</small></span><i>${state.liveSignalsEnabled ? "●" : "○"}</i></button><button type="button" data-lc-blocked-list><span><b>Blocked creators</b><small>${state.blockedIds.size} blocked</small></span><i>›</i></button><button type="button" data-auth-route="profile"><span><b>Privacy, password and deletion</b><small>Secure account settings</small></span><i>›</i></button>`}
+            <button type="button" data-lc-safety-center><span><b>Safety center</b><small>Reports, blocks, signals and account state</small></span><i>›</i></button>
+            ${state.demo ? "" : `<button type="button" data-auth-route="profile"><span><b>Privacy, password and deletion</b><small>Secure account settings</small></span><i>›</i></button>`}
             <div class="lc-v4-account-boundary"><span><b>Account security role</b><small>Separate from the product experience</small></span><em>${safe(state.profile.role || "user")}</em></div>
           </div>
         </section>
@@ -1681,32 +1829,41 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
   }
 
   async function navigateProduct(value) {
-    if (["overview", "creators", "campaigns", "live", "performance", "integrations", "safety", "settings"].includes(value)) {
-      state.businessView = value;
-      return renderIndustryHome(value);
+    try {
+      if (["overview", "creators", "campaigns", "live", "performance", "integrations", "safety", "settings"].includes(value)) {
+        state.businessView = value;
+        return renderIndustryHome(value);
+      }
+      if (["profile", "account"].includes(value)) {
+        state.socialView = "profile";
+        return renderAccount();
+      }
+      if (["explore", "discover"].includes(value)) {
+        await loadCreators();
+        state.socialView = "explore";
+        return renderSocialExplore();
+      }
+      if (["create", "creator"].includes(value)) {
+        state.socialView = "create";
+        return renderSocialCreate();
+      }
+      if (value === "activity") {
+        state.socialView = "activity";
+        return renderSocialActivity();
+      }
+      if (value === "home") {
+        state.socialView = "home";
+        return renderPlayerHome();
+      }
+      return routeHome();
+    } finally {
+      window.requestAnimationFrame(() => {
+        const heading = q("#lcProductShell h1, #lcProductShell h2");
+        if (!heading) return;
+        heading.setAttribute("tabindex", "-1");
+        heading.focus({ preventScroll: true });
+      });
     }
-    if (["profile", "account"].includes(value)) {
-      state.socialView = "profile";
-      return renderAccount();
-    }
-    if (["explore", "discover"].includes(value)) {
-      await loadCreators();
-      state.socialView = "explore";
-      return renderSocialExplore();
-    }
-    if (["create", "creator"].includes(value)) {
-      state.socialView = "create";
-      return renderSocialCreate();
-    }
-    if (value === "activity") {
-      state.socialView = "activity";
-      return renderSocialActivity();
-    }
-    if (value === "home") {
-      state.socialView = "home";
-      return renderPlayerHome();
-    }
-    return routeHome();
   }
 
   async function handleClick(event) {
@@ -1734,6 +1891,7 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     const sessionVisibility = target.closest("[data-lc-session-visibility]");
     const sessionStatus = target.closest("[data-lc-session-status]");
     const creatorSafety = target.closest("[data-lc-creator-safety]");
+    const safetyCenter = target.closest("[data-lc-safety-center]");
     const confirmBlock = target.closest("[data-lc-confirm-block]");
     const blockedList = target.closest("[data-lc-blocked-list]");
     const unblock = target.closest("[data-lc-unblock]");
@@ -1764,9 +1922,8 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
       }
       if (businessView) {
         event.preventDefault();
-        state.businessView = businessView.dataset.lcBusinessView;
-        renderIndustryHome(state.businessView);
-        return;
+        event.stopPropagation();
+        return navigateProduct(businessView.dataset.lcBusinessView);
       }
       if (discoveryFilter) {
         event.preventDefault();
@@ -1788,6 +1945,10 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
       if (creatorSafety) {
         event.preventDefault();
         return renderCreatorSafety(creatorSafety.dataset.lcCreatorId, creatorSafety.dataset.lcCreatorSafety);
+      }
+      if (safetyCenter) {
+        event.preventDefault();
+        return renderSocialSafety();
       }
       if (confirmBlock) {
         event.preventDefault();
@@ -1886,26 +2047,9 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
       if (nav) {
         event.preventDefault();
         const value = nav.dataset.lcProduct;
-        if (["profile", "account"].includes(value)) {
-          state.socialView = "profile";
-          return renderAccount();
-        }
-        if (["explore", "discover"].includes(value)) {
-          await loadCreators();
-          state.socialView = "explore";
-          return renderSocialExplore();
-        }
-        if (["create", "creator"].includes(value)) {
-          state.socialView = "create";
-          return renderSocialCreate();
-        }
-        if (value === "activity") {
-          state.socialView = "activity";
-          return renderSocialActivity();
-        }
-        if (value === "home") {
-          state.socialView = "home";
-          return renderPlayerHome();
+        if (["profile", "account", "explore", "discover", "create", "creator", "activity", "home"].includes(value)) {
+          event.stopPropagation();
+          return navigateProduct(value);
         }
         if (value === "handoff") {
           if (state.demo && state.selectedSession && setProductHash(["demo", state.demoPersona, "handoff", state.selectedSession])) return;
@@ -1985,11 +2129,16 @@ ${isLive ? `<button class="lc-product-btn lc-v3-primary-wide" type="button" data
     state.creatorStudioView = "overview";
     state.businessView = "overview";
     state.ready = true;
+    if (!profile || profile.account_status !== "active") {
+      renderAccountDenied();
+      return;
+    }
     renderLoading();
     try {
       await loadState();
       state.loadError = null;
       renderProductTarget(productParts(target));
+      q("#lcProductShell")?.removeAttribute("aria-busy");
       void trackProductEvent("product_open", { dedupeKey: "product_open" });
     } catch (error) {
       renderLoadError(error);

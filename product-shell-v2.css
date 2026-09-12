@@ -165,6 +165,12 @@ html.lc-product-v2 .lc-product-demo-banner,html.lc-product-v2 .lc-product-connec
 html.lc-product-v2 .lc-product-demo-banner{border-color:rgba(247,198,111,.16);background:rgba(247,198,111,.042)}
 html.lc-product-v2 .lc-product-demo-banner strong{color:#ffdc9d}
 html.lc-product-v2 .lc-product-connectivity{border-color:rgba(255,119,111,.18);background:rgba(255,119,111,.055)}
+html.lc-product-v2 .lc-product-connectivity.is-online{border-color:rgba(105,230,200,.2);background:rgba(105,230,200,.065);color:#aafbf0}
+html.lc-product-v2 .lc-product-loading{gap:10px;align-content:center}
+html.lc-product-v2 .lc-product-loading h2,html.lc-product-v2 .lc-product-loading p{margin:0}
+html.lc-product-v2 .lc-product-loading p{max-width:42ch}
+.lc-product-spinner{width:28px;height:28px;border:2px solid rgba(184,255,246,.13);border-top-color:var(--lc-accent-soft);border-radius:50%;animation:lc-product-spin .8s linear infinite}
+@keyframes lc-product-spin{to{transform:rotate(360deg)}}
 
 /* Bottom navigation */
 html.lc-product-v2 .lc-product-tabs{position:sticky;bottom:15px;z-index:40;width:min(640px,calc(100% - 48px));max-width:none;margin-top:22px;padding:7px;border:1px solid rgba(184,255,246,.13);border-radius:19px;background:rgba(5,9,10,.89);box-shadow:0 18px 58px rgba(0,0,0,.36);backdrop-filter:blur(26px) saturate(125%);-webkit-backdrop-filter:blur(26px) saturate(125%)}

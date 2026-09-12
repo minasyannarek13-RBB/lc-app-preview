@@ -6,8 +6,11 @@
   const SOCIAL_FEED_CSS_ID = "lcSocialFeedV4Css";
   const CREATOR_STUDIO_CSS_ID = "lcCreatorStudioV4Css";
   const SOCIAL_ACCOUNT_CSS_ID = "lcSocialAccountV4Css";
+  const SOCIAL_JOURNEY_CSS_ID = "lcSocialJourneyV4Css";
+  const BUSINESS_CONSOLE_CSS_ID = "lcBusinessConsoleV4Css";
   const RAIL_ID = "lcProductV2Rail";
   const LOAD_ID = "lcProductV2Loading";
+  const ROUTE_STATUS_ID = "lcProductRouteStatus";
   const PRODUCT_SELECTOR = "#lcProductShell";
 
   const SOCIAL_NAV = [
@@ -37,7 +40,7 @@
       link.rel = "stylesheet";
       document.head.appendChild(link);
     }
-    if (!/product-shell-v2\.css\?v=4$/.test(link.href)) link.href = "product-shell-v2.css?v=4";
+    if (!/product-shell-v2\.css\?v=5$/.test(link.href)) link.href = "product-shell-v2.css?v=5";
 
     let v4 = document.getElementById(V4_CSS_ID);
     if (!v4) {
@@ -46,7 +49,7 @@
       v4.rel = "stylesheet";
       document.head.appendChild(v4);
     }
-    if (!/product-shell-v4\.css\?v=3$/.test(v4.href)) v4.href = "product-shell-v4.css?v=3";
+    if (!/product-shell-v4\.css\?v=4$/.test(v4.href)) v4.href = "product-shell-v4.css?v=4";
 
     let socialFeed = document.getElementById(SOCIAL_FEED_CSS_ID);
     if (!socialFeed) {
@@ -73,7 +76,25 @@
       socialAccount.rel = "stylesheet";
       document.head.appendChild(socialAccount);
     }
-    if (!/social-account-v4\.css\?v=1$/.test(socialAccount.href)) socialAccount.href = "social-account-v4.css?v=1";
+    if (!/social-account-v4\.css\?v=2$/.test(socialAccount.href)) socialAccount.href = "social-account-v4.css?v=2";
+
+    let socialJourney = document.getElementById(SOCIAL_JOURNEY_CSS_ID);
+    if (!socialJourney) {
+      socialJourney = document.createElement("link");
+      socialJourney.id = SOCIAL_JOURNEY_CSS_ID;
+      socialJourney.rel = "stylesheet";
+      document.head.appendChild(socialJourney);
+    }
+    if (!/social-journey-v4\.css\?v=1$/.test(socialJourney.href)) socialJourney.href = "social-journey-v4.css?v=1";
+
+    let businessConsole = document.getElementById(BUSINESS_CONSOLE_CSS_ID);
+    if (!businessConsole) {
+      businessConsole = document.createElement("link");
+      businessConsole.id = BUSINESS_CONSOLE_CSS_ID;
+      businessConsole.rel = "stylesheet";
+      document.head.appendChild(businessConsole);
+    }
+    if (!/business-console-v4\.css\?v=2$/.test(businessConsole.href)) businessConsole.href = "business-console-v4.css?v=2";
   }
 
   const productRoot = () => document.querySelector(PRODUCT_SELECTOR);
@@ -279,6 +300,28 @@
     document.body.appendChild(bar);
   }
 
+  function ensureRouteStatus() {
+    if (document.getElementById(ROUTE_STATUS_ID)) return;
+    const status = document.createElement("div");
+    status.id = ROUTE_STATUS_ID;
+    status.className = "sr-only";
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("aria-atomic", "true");
+    document.body.appendChild(status);
+  }
+
+  let lastRouteAnnouncement = "";
+  function announceRoute(root) {
+    const heading = root.querySelector("h1,h2")?.textContent?.trim();
+    const label = heading || root.querySelector(".lc-product-brand strong")?.textContent?.trim() || "LC App";
+    const announcement = `${productFamily() === "business" ? "Business back office" : "Social app"}: ${label}`;
+    if (announcement === lastRouteAnnouncement) return;
+    lastRouteAnnouncement = announcement;
+    const status = document.getElementById(ROUTE_STATUS_ID);
+    if (status) status.textContent = announcement;
+  }
+
   function improveSemantics(root) {
     root.setAttribute("role", "main");
     root.setAttribute("aria-label", productFamily() === "business" ? "LC App business back office" : "LC App social experience");
@@ -312,14 +355,17 @@
       banner.setAttribute("role", "status");
       banner.setAttribute("aria-label", "Illustrative preview mode");
     });
-    root.querySelectorAll(".lc-product-connectivity").forEach((banner) => banner.setAttribute("role", "alert"));
+    root.querySelectorAll(".lc-product-connectivity").forEach((banner) => {
+      banner.setAttribute("role", "status");
+      banner.setAttribute("aria-live", "polite");
+    });
     root.querySelectorAll(".lc-product-empty").forEach((empty) => {
       if (!empty.getAttribute("role")) empty.setAttribute("role", "status");
     });
   }
 
   function syncBusyState(root) {
-    const busy = Boolean(root.querySelector("button:disabled:not(.lc-product-tabs button),[aria-busy='true']"));
+    const busy = root.getAttribute("aria-busy") === "true" || Boolean(root.querySelector("[aria-busy='true'],[data-lc-busy='true']"));
     document.documentElement.classList.toggle("lc-v2-busy", busy);
   }
 
@@ -332,6 +378,7 @@
   function upgrade() {
     ensureCss();
     ensureLoadingBar();
+    ensureRouteStatus();
     document.documentElement.classList.toggle("lc-product-v2", isProductRoute());
     const root = productRoot();
     if (!root || !isProductRoute()) return;
@@ -342,6 +389,7 @@
     improveSemantics(root);
     syncBusyState(root);
     syncScrollState();
+    announceRoute(root);
   }
 
   let raf = 0;
