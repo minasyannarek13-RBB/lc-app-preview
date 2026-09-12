@@ -1,0 +1,45 @@
+name: Sync LC Reveal Preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-reveal-preview.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout preview repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch reveal-sales-v1 source
+        run: |
+          rm -rf /tmp/lc-source
+          git clone --depth 1 --branch reveal-sales-v1 https://github.com/minasyannarek13-RBB/lc-app-investor-demo.git /tmp/lc-source
+
+      - name: Sync source into preview repo
+        run: |
+          rsync -a --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'CNAME' \
+            /tmp/lc-source/ ./
+
+      - name: Commit synced preview snapshot
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'Preview already matches reveal-sales-v1.'
+            exit 0
+          fi
+          SOURCE_SHA=$(git -C /tmp/lc-source rev-parse HEAD)
+          git commit -m "Sync LC reveal preview from ${SOURCE_SHA}"
+          git push origin main
