@@ -22,14 +22,16 @@ jobs:
         run: |
           rm -rf /tmp/lc-source
           git clone --depth 1 --branch reveal-sales-v1 https://github.com/minasyannarek13-RBB/lc-app-investor-demo.git /tmp/lc-source
+          test -f /tmp/lc-source/LC_App_GitHub_Pages_Upload/index.html
 
-      - name: Sync source into preview repo
+      - name: Sync reveal app to preview root
         run: |
           rsync -a --delete \
             --exclude '.git/' \
             --exclude '.github/' \
             --exclude 'CNAME' \
-            /tmp/lc-source/ ./
+            /tmp/lc-source/LC_App_GitHub_Pages_Upload/ ./
+          rm -f CNAME
 
       - name: Commit synced preview snapshot
         run: |
@@ -37,9 +39,10 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           if git diff --cached --quiet; then
-            echo 'Preview already matches reveal-sales-v1.'
+            echo 'Preview already matches reveal-sales-v1 app snapshot.'
             exit 0
           fi
           SOURCE_SHA=$(git -C /tmp/lc-source rev-parse HEAD)
           git commit -m "Sync LC reveal preview from ${SOURCE_SHA}"
+          git pull --rebase origin main
           git push origin main
