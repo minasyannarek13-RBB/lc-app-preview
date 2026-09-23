@@ -8511,7 +8511,8 @@
     function mediaStyle(card, frame) {
       const viewportFactor = window.innerWidth <= 480 ? 0.98 : 1;
       const preset = dealerFeedPreset(card);
-      const useNeutralStage = Boolean(preset.neutralGameplayStage) || (frame.videoFit || preset.gameplayVideoFit) === "contain";
+      const hasStream = Boolean(card.gameplayVideo || card.tableVideo || card.watchVideo);
+      const useNeutralStage = hasStream && (Boolean(preset.neutralGameplayStage) || (frame.videoFit || preset.gameplayVideoFit) === "contain");
       return [
         useNeutralStage
           ? "background:radial-gradient(circle at 50% 18%, rgba(255,255,255,.06), transparent 24%), linear-gradient(180deg, rgba(16, 12, 16, .74), rgba(5, 6, 9, .94) 58%, rgba(2, 3, 5, .98))"
