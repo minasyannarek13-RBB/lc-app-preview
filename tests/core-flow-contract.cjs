@@ -1,0 +1,13 @@
+const fs=require("fs");
+const app=fs.readFileSync("app-product.js","utf8");
+const auth=fs.readFileSync("auth.js","utf8");
+const html=fs.readFileSync("index.html","utf8");
+const must=(ok,msg)=>{if(!ok) throw new Error(msg)};
+for(const e of ["creator_profile_open","creator_follow","live_session_open","handoff_intent","handoff_return"]) must(app.includes(e),"missing event "+e);
+must(app.includes('data-lc-return-live='),"demo operator-return control missing");
+must(app.includes('DESTINATION NOT CONFIGURED'),"production handoff must fail closed");
+must(app.includes('ATTRIBUTION_KEY_PREFIX'),"attribution storage contract missing");
+must(auth.includes('AUTH_RETURN_KEY'),"auth return storage missing");
+must(auth.includes('isProductRoute'),"product auth-return guard missing");
+for(const f of ["app-product.js","auth.js","social.js"]) must(html.includes(f),"index missing "+f);
+console.log("LC core-flow contract PASS");
